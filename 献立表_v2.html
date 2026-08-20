@@ -438,32 +438,79 @@ function esc(s){const e=document.createElement('div');e.textContent=s;return e.i
 const TODAY = fmtDate(new Date());
 const TODAY_OBJ = new Date();
 
-// meals[dateStr] = { morning:{text,kcal,photos[]}, lunch:{...}, dinner:{...}, snack:{...}, rating, comment }
+/* =====================================================
+   localStorage 保存・読み込み
+===================================================== */
+const LS_KEY = 'konndate_meals_v1';
+const LS_SETTINGS_KEY = 'konndate_settings_v1';
+
+function saveMeals(){
+  try{
+    localStorage.setItem(LS_KEY, JSON.stringify(state.meals));
+  }catch(e){
+    console.warn('localStorage保存失敗:', e);
+  }
+}
+
+function loadMeals(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  }catch(e){
+    console.warn('localStorage読み込み失敗:', e);
+    return {};
+  }
+}
+
+function saveSettings(){
+  try{
+    const settings = {
+      goalLevel: state.goalLevel,
+      aiEndpoint: state.aiEndpoint,
+      aiPromptExtra: state.aiPromptExtra,
+      profileAge: document.getElementById('profileAge')?.value || '30',
+      profileGender: document.getElementById('profileGender')?.value || 'male',
+    };
+    localStorage.setItem(LS_SETTINGS_KEY, JSON.stringify(settings));
+  }catch(e){}
+}
+
+function loadSettings(){
+  try{
+    const raw = localStorage.getItem(LS_SETTINGS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  }catch(e){ return {}; }
+}
+
+// meals[dateStr] = { morning:{text,kcal}, lunch:{...}, dinner:{...}, snack:{...}, rating, comment }
+// ※写真データ(Base64)は保存しない
 const state = {
   goalLevel:'balance',
   selectedDate:TODAY,
   calendar:{year:TODAY_OBJ.getFullYear(), month:TODAY_OBJ.getMonth()+1},
-  meals:{},
-  chat:[{role:'ai',text:'こんにちは！📷 写真ボタンで食事を撮影するか、テキストで献立を入力してください。LM Studioが接続されていない場合も一般的なカロリー計算で記録できます。'}],
+  meals: loadMeals(),
+  chat:[{role:'ai',text:'こんにちは！📷 写真ボタンで食事を撮影するか、テキストで献立を入力してください。LM Studioが接続されていない場合も一般的なカロリー計算で記録できます。\n\n💾 入力データはこの端末のブラウザに自動保存されます。'}],
   aiEndpoint:'http://localhost:1234/v1/chat/completions',
   aiPromptExtra:'',
   lmAvailable:false,
-  // 写真モーダル用一時状態
   photoModal:{ dataUrl:null, selectedType:null, analyzing:false, result:null }
 };
 
 function getMeal(ds){
-  if(!state.meals[ds]) state.meals[ds]={morning:{text:'',kcal:0,photos:[]},lunch:{text:'',kcal:0,photos:[]},dinner:{text:'',kcal:0,photos:[]},snack:{text:'',kcal:0,photos:[]},rating:null,comment:''};
+  if(!state.meals[ds]) state.meals[ds]={morning:{text:'',kcal:0},lunch:{text:'',kcal:0},dinner:{text:'',kcal:0},snack:{text:'',kcal:0},rating:null,comment:''};
+  // 旧データ互換：photosフィールドは無視
+  MEAL_TYPES.forEach(t=>{
+    if(!state.meals[ds][t.id]) state.meals[ds][t.id]={text:'',kcal:0};
+  });
   return state.meals[ds];
 }
-function getBlock(ds,type){return getMeal(ds)[type];}
 function totalKcal(ds){
   const m=getMeal(ds);
   return MEAL_TYPES.reduce((s,t)=>s+(m[t.id]?.kcal||0),0);
 }
 function hasAnyMeal(ds){
   const m=getMeal(ds);
-  return MEAL_TYPES.some(t=>m[t.id]?.text||m[t.id]?.photos?.length);
+  return MEAL_TYPES.some(t=>m[t.id]?.text);
 }
 
 /* =====================================================
@@ -662,15 +709,15 @@ function savePhotoResult(){
   const meal = getMeal(ds);
   const block = meal[mtype];
 
-  // テキストに追加（既存があれば改行して追加）
+  // テキストに追加（既存があれば読点で追加）
   if(foodText){
-    block.text = block.text ? block.text + '\n' + foodText : foodText;
+    block.text = block.text ? block.text + '、' + foodText : foodText;
   }
   // カロリー加算
   block.kcal = (block.kcal||0) + kcal;
-  // 写真追加
-  block.photos.push(state.photoModal.dataUrl);
+  // ※写真データ(Base64)は保存しない
 
+  saveMeals(); // localStorage に保存
   closePhotoModal();
   renderDayPanel();
   renderCalendarGrid();
@@ -717,6 +764,7 @@ ${lines.join('\n')}
     const r = RATINGS[rating];
     getMeal(ds).rating = rating;
     getMeal(ds).comment = comment;
+    saveMeals();
     commentArea.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
         <span class="rbadge ${r.cls}">${r.emoji} ${r.label}</span>
@@ -745,6 +793,7 @@ ${lines.join('\n')}
     }
     const detail = jsonMatch ? content.slice(content.indexOf(jsonMatch[0])+jsonMatch[0].length).trim() : content;
     getMeal(ds).rating=rating; getMeal(ds).comment=shortComment;
+    saveMeals();
     const r=RATINGS[rating];
     commentArea.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
@@ -959,6 +1008,9 @@ function renderMealBlocks(){
 
     // ヘッダー
     const kcalStr=block.kcal?`${block.kcal} kcal`:'';
+    const photoLabel = state.lmAvailable
+      ? '📷 写真で認識'
+      : '📷 写真から入力';
     div.innerHTML=`
       <div class="meal-block-head" data-type="${mt.id}">
         <span class="meal-block-head-left">${mt.label}</span>
@@ -971,28 +1023,13 @@ function renderMealBlocks(){
           <input class="kcal-input" type="number" data-kcal="${mt.id}" min="0" max="9999" value="${block.kcal||''}">
           <button class="btn-secondary" data-calcbtn="${mt.id}" style="padding:4px 8px;font-size:.74rem;">自動計算</button>
         </div>
-        <div class="meal-photo-strip" id="photos-${mt.id}-${ds}"></div>
         <div class="meal-block-actions">
-          <button class="btn-save" data-savebtn="${mt.id}">保存</button>
-          <button class="btn-photo" data-photobtn="${mt.id}">📷 写真を追加</button>
+          <button class="btn-save" data-savebtn="${mt.id}">💾 保存</button>
+          <button class="btn-photo" data-photobtn="${mt.id}">${photoLabel}</button>
         </div>
+        <div class="meal-save-note" id="save-note-${mt.id}" style="font-size:.72rem;color:var(--sprout);display:none;margin-top:4px;">✓ 保存しました</div>
       </div>`;
     container.appendChild(div);
-
-    // 写真サムネイル
-    const strip=div.querySelector(`#photos-${mt.id}-${ds}`);
-    (block.photos||[]).forEach((url,idx)=>{
-      const thumb=document.createElement('div');
-      thumb.className='photo-thumb';
-      thumb.innerHTML=`<img src="${url}" alt="食事写真"><button class="photo-thumb-del" data-idx="${idx}" data-type="${mt.id}">×</button>`;
-      strip.appendChild(thumb);
-    });
-    strip.querySelectorAll('.photo-thumb-del').forEach(btn=>{
-      btn.addEventListener('click',()=>{
-        meal[btn.dataset.type].photos.splice(parseInt(btn.dataset.idx),1);
-        renderMealBlocks(); renderCalendarGrid();
-      });
-    });
 
     // ブロック折りたたみ
     div.querySelector('.meal-block-head').addEventListener('click',()=>{
@@ -1012,19 +1049,23 @@ function renderMealBlocks(){
       div.querySelector(`[data-kcal="${mt.id}"]`).value=estimateCalorieLocal(txt);
     });
 
-    // 保存
+    // 保存ボタン → localStorage に保存
     div.querySelector(`[data-savebtn="${mt.id}"]`).addEventListener('click',()=>{
       const txt=div.querySelector(`[data-type="${mt.id}"].meal-textarea`).value.trim();
       const kcalVal=parseInt(div.querySelector(`[data-kcal="${mt.id}"]`).value)||0;
       meal[mt.id].text=txt;
       meal[mt.id].kcal=kcalVal;
+      saveMeals(); // ← localStorage に保存
+      // 保存完了メッセージを一時表示
+      const note=div.querySelector(`#save-note-${mt.id}`);
+      if(note){ note.style.display='block'; setTimeout(()=>note.style.display='none',2000); }
       renderDayPanel(); renderCalendarGrid(); renderWeekSummary();
-      // 全ブロック入力済みなら自動評価
-      const hasAll=MEAL_TYPES.filter(t=>t.id!=='snack').every(t=>meal[t.id].text||meal[t.id].photos?.length);
+      // 昼・夜が揃っていれば自動評価
+      const hasAll=MEAL_TYPES.filter(t=>t.id!=='snack').every(t=>meal[t.id].text);
       if(hasAll&&state.lmAvailable) evaluateDayMeal(ds);
     });
 
-    // 写真ボタン
+    // 写真ボタン → モーダルを開く（ブロック種別を事前に設定）
     div.querySelector(`[data-photobtn="${mt.id}"]`).addEventListener('click',()=>{
       pendingPhotoType=mt.id;
       document.getElementById('fileInput').click();
@@ -1173,14 +1214,14 @@ document.getElementById('btnEvalDay').addEventListener('click',()=>evaluateDayMe
 document.getElementById('btnClearDay').addEventListener('click',()=>{
   if(!confirm(`${fmtLabel(state.selectedDate)}の献立をすべて削除しますか？`)) return;
   delete state.meals[state.selectedDate];
+  saveMeals(); // localStorage からも削除
   renderCalendarGrid(); renderDayPanel(); renderWeekSummary();
 });
 
 // ドロワー
 document.getElementById('drawerToggle').addEventListener('click',()=>{document.getElementById('drawer').classList.add('open');document.getElementById('drawerOverlay').classList.add('open');});
 ['drawerClose','drawerOverlay'].forEach(id=>document.getElementById(id).addEventListener('click',()=>{document.getElementById('drawer').classList.remove('open');document.getElementById('drawerOverlay').classList.remove('open');}));
-document.getElementById('aiEndpoint').addEventListener('change',e=>{state.aiEndpoint=e.target.value;checkLMStudio();});
-document.getElementById('profileGoal').addEventListener('change',e=>{state.goalLevel=e.target.value;renderLevelSelector();document.getElementById('tipBanner').textContent=TIPS[state.goalLevel];});
+// aiEndpoint・profileGoalのイベントは初期化ブロック内で設定済み
 
 // 写真モーダル
 document.getElementById('photoModalClose').addEventListener('click',closePhotoModal);
@@ -1213,6 +1254,50 @@ document.addEventListener('keydown',e=>{
    初期化
 ===================================================== */
 initAge();
+
+// localStorage から設定を復元
+(function(){
+  const s = loadSettings();
+  if(s.goalLevel) state.goalLevel = s.goalLevel;
+  if(s.aiEndpoint) state.aiEndpoint = s.aiEndpoint;
+  if(s.aiPromptExtra) state.aiPromptExtra = s.aiPromptExtra;
+  // プロフィール設定の復元（DOM生成後に設定）
+  if(s.profileAge){
+    const el=document.getElementById('profileAge');
+    if(el) el.value=s.profileAge;
+  }
+  if(s.profileGender){
+    const el=document.getElementById('profileGender');
+    if(el) el.value=s.profileGender;
+  }
+  if(s.aiEndpoint){
+    const el=document.getElementById('aiEndpoint');
+    if(el) el.value=s.aiEndpoint;
+  }
+  if(s.aiPromptExtra){
+    const el=document.getElementById('aiPromptExtra');
+    if(el) el.value=s.aiPromptExtra;
+  }
+  if(s.goalLevel){
+    const el=document.getElementById('profileGoal');
+    if(el) el.value=s.goalLevel;
+  }
+})();
+
+// 設定変更時にlocalStorageへ保存
+document.getElementById('aiEndpoint').addEventListener('change',e=>{
+  state.aiEndpoint=e.target.value; saveSettings(); checkLMStudio();
+});
+document.getElementById('aiPromptExtra').addEventListener('change',()=>saveSettings());
+document.getElementById('profileAge').addEventListener('change',()=>saveSettings());
+document.getElementById('profileGender').addEventListener('change',()=>saveSettings());
+document.getElementById('profileGoal').addEventListener('change',e=>{
+  state.goalLevel=e.target.value;
+  renderLevelSelector();
+  document.getElementById('tipBanner').textContent=TIPS[state.goalLevel];
+  saveSettings();
+});
+
 renderLevelSelector();
 document.getElementById('tipBanner').textContent=TIPS[state.goalLevel];
 renderCalNav();
