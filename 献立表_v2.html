@@ -548,11 +548,11 @@ ${extra?'追加指示：'+extra:''}
 /* =====================================================
    AI呼び出し（テキスト）
 ===================================================== */
-async function callAI(messages, temperature=0.3){
+async function callAI(messages, temperature=0.3, maxTokens=500){
   const res = await fetch(state.aiEndpoint,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({model:'local-model',messages,temperature})
+    body:JSON.stringify({model:'local-model', messages, temperature, max_tokens: maxTokens})
   });
   if(!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
@@ -725,88 +725,114 @@ function savePhotoResult(){
 }
 
 /* =====================================================
-   AI評価（テキスト＋カロリー）
+   AI評価（2段階：①即時短評 ②チャットで詳細）
 ===================================================== */
 async function evaluateDayMeal(ds){
   if(!hasAnyMeal(ds)) return;
   const commentArea = document.getElementById('dayAiCommentArea');
-  commentArea.innerHTML = `<div class="ai-box"><span class="spinner"></span>AIが評価中...</div>`;
+  commentArea.innerHTML = `<div class="ai-box"><span class="spinner"></span>評価中（数秒かかります）...</div>`;
   document.getElementById('btnEvalDay').disabled = true;
 
   const meal = getMeal(ds);
   const lines = MEAL_TYPES.map(t=>{
     const b=meal[t.id];
-    const has = b.text||b.photos?.length;
-    if(!has) return null;
-    const kcalStr = b.kcal ? `（${b.kcal}kcal）` : '';
-    return `${t.label}：${b.text||'（写真のみ）'}${kcalStr}`;
+    if(!b.text) return null;
+    const kcalStr = b.kcal ? `(${b.kcal}kcal)` : '';
+    return `${t.label}:${b.text}${kcalStr}`;
   }).filter(Boolean);
   const total = totalKcal(ds);
 
-  const userMsg = `${fmtLabel(ds)}の献立を評価してください。
-${lines.join('\n')}
-合計カロリー：${total}kcal
-
-以下の形式でJSON＋コメントを返してください：
-{"rating":"good|ok|bad","comment":"短評（80字以内）"}
-（JSONの後に改行して詳しいアドバイスを書いてください）`;
-
+  // ① ローカルフォールバック（未接続時）
   if(!state.lmAvailable){
-    // ローカルフォールバック評価
     let rating = 'ok';
-    const targetKcal = parseInt(document.getElementById('profileGender')?.value==='female'?1600:2000);
+    const isFemale = document.getElementById('profileGender')?.value==='female';
+    const targetKcal = isFemale ? 1600 : 2000;
     if(total>0){
       const ratio = total/targetKcal;
       if(ratio>=0.7 && ratio<=1.2) rating='good';
       else if(ratio<0.5 || ratio>1.5) rating='bad';
     }
-    const comment = total>0 ? `合計${total}kcal。` : '献立を入力するとより詳しく評価できます。';
-    const r = RATINGS[rating];
+    const comment = total>0 ? `合計${total}kcal（目安${targetKcal}kcal）` : '献立を入力するとより詳しく評価できます。';
     getMeal(ds).rating = rating;
     getMeal(ds).comment = comment;
     saveMeals();
-    commentArea.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-        <span class="rbadge ${r.cls}">${r.emoji} ${r.label}</span>
-        <span style="font-size:.82rem;color:var(--ink-soft);">${esc(comment)}</span>
-      </div>
-      <div class="ai-box">⚠️ LM Studio未接続のため簡易評価を行いました。より詳しいアドバイスにはLM Studioを接続してください。</div>`;
+    const r = RATINGS[rating];
+    commentArea.innerHTML = renderEvalResult(r, comment, true);
     document.getElementById('dayRatingBadge').innerHTML = `<span class="rbadge ${r.cls}">${r.emoji} ${r.label}</span>`;
     document.getElementById('btnEvalDay').disabled = false;
     renderCalendarGrid(); renderWeekSummary();
     return;
   }
 
+  // ② AI評価（JSONのみ・max_tokens:150で高速化）
+  // プロンプトを短くして処理時間を削減
+  const sysPrompt = `栄養アドバイザー。1人分。食事スタイル:${state.goalLevel}。
+JSONのみ返す（前後の説明不要）:{"rating":"good|ok|bad","comment":"日本語短評50字以内"}`;
+
+  const userMsg = `献立:${lines.join('/')} 合計${total}kcal`;
+
   try{
     const content = await callAI([
-      {role:'system',content:buildSysPrompt()},
-      {role:'user',content:userMsg}
-    ]);
+      {role:'system', content:sysPrompt},
+      {role:'user',   content:userMsg}
+    ], 0.2, 150); // max_tokens:150で高速化
+
+    // JSONパース
     const jsonMatch = content.match(/\{[\s\S]*?\}/);
     let rating='ok', shortComment='';
     if(jsonMatch){
       try{
-        const p=JSON.parse(jsonMatch[0]);
-        rating=['good','ok','bad'].includes(p.rating)?p.rating:'ok';
-        shortComment=p.comment||'';
+        const p = JSON.parse(jsonMatch[0]);
+        rating = ['good','ok','bad'].includes(p.rating) ? p.rating : 'ok';
+        shortComment = p.comment || '';
       }catch{}
     }
-    const detail = jsonMatch ? content.slice(content.indexOf(jsonMatch[0])+jsonMatch[0].length).trim() : content;
-    getMeal(ds).rating=rating; getMeal(ds).comment=shortComment;
+    // JSONパース失敗時はテキストをそのまま短評に
+    if(!shortComment) shortComment = content.slice(0,50);
+
+    getMeal(ds).rating = rating;
+    getMeal(ds).comment = shortComment;
     saveMeals();
-    const r=RATINGS[rating];
-    commentArea.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-        <span class="rbadge ${r.cls}">${r.emoji} ${r.label}</span>
-        <span style="font-size:.82rem;color:var(--ink-soft);">${esc(shortComment)}</span>
-      </div>
-      ${detail?`<div class="ai-box">${esc(detail)}</div>`:''}`;
-    document.getElementById('dayRatingBadge').innerHTML=`<span class="rbadge ${r.cls}">${r.emoji} ${r.label}</span>`;
+    const r = RATINGS[rating];
+    commentArea.innerHTML = renderEvalResult(r, shortComment, false);
+    document.getElementById('dayRatingBadge').innerHTML = `<span class="rbadge ${r.cls}">${r.emoji} ${r.label}</span>`;
   }catch(err){
-    commentArea.innerHTML=`<div class="ai-box err">⚠️ LM Studioに接続できませんでした。<br><small>${esc(err.message)}</small></div>`;
+    commentArea.innerHTML = `<div class="ai-box err">⚠️ 評価に失敗しました。<br><small>${esc(err.message)}</small></div>`;
   }
-  document.getElementById('btnEvalDay').disabled=false;
+  document.getElementById('btnEvalDay').disabled = false;
   renderCalendarGrid(); renderWeekSummary();
+}
+
+// 評価結果HTML生成（「詳しく聞く」ボタン付き）
+function renderEvalResult(r, comment, isLocal){
+  const detailBtn = !isLocal
+    ? `<button class="btn-secondary" style="margin-top:8px;font-size:.78rem;" onclick="askDetailAdvice()">💬 詳しいアドバイスを聞く</button>`
+    : '';
+  const localNote = isLocal
+    ? `<div class="ai-box" style="margin-top:6px;font-size:.78rem;">⚠️ LM Studio未接続のため簡易評価です。詳しいアドバイスはLM Studioを接続してください。</div>`
+    : '';
+  return `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+      <span class="rbadge ${r.cls}">${r.emoji} ${r.label}</span>
+      <span style="font-size:.82rem;color:var(--ink-soft);">${esc(comment)}</span>
+    </div>
+    ${detailBtn}${localNote}`;
+}
+
+// 「詳しいアドバイスを聞く」→チャット欄に自動入力して送信
+function askDetailAdvice(){
+  const ds = state.selectedDate;
+  const meal = getMeal(ds);
+  const lines = MEAL_TYPES.map(t=>{
+    const b=meal[t.id];
+    if(!b.text) return null;
+    return `${t.label}:${b.text}${b.kcal?`(${b.kcal}kcal)`:''}`;
+  }).filter(Boolean);
+  const chatInput = document.getElementById('chatInput');
+  chatInput.value = `${fmtLabel(ds)}の献立について詳しくアドバイスをください。\n${lines.join('\n')}`;
+  // チャット欄までスクロール
+  chatInput.scrollIntoView({behavior:'smooth', block:'center'});
+  chatInput.focus();
 }
 
 /* =====================================================
@@ -843,7 +869,7 @@ async function sendChat(){
       ...state.chat.slice(0,-1).map(m=>({role:m.role==='user'?'user':'assistant',content:m.text})).filter(m=>m.content!=='…'),
       {role:'user',content:ctx+text}
     ];
-    const reply=await callAI(messages,0.5);
+    const reply=await callAI(messages, 0.5, 1200);
     state.chat[state.chat.length-1]={role:'ai',text:reply||'（応答なし）'};
   }catch(err){
     state.chat[state.chat.length-1]={role:'ai',text:`⚠️ エラー：${err.message}`};
