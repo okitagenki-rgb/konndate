@@ -204,7 +204,39 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--fb);line-h
 /* ===== スピナー ===== */
 .spinner{display:inline-block;width:11px;height:11px;border:2px solid var(--border);border-top-color:var(--sprout);border-radius:50%;animation:spin .7s linear infinite;margin-right:4px;vertical-align:middle;}
 @keyframes spin{to{transform:rotate(360deg);}}
-</style>
+
+/* ===== 詳細ポップアップ ===== */
+.detail-popup-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:60;display:flex;align-items:center;justify-content:center;padding:16px;}
+.detail-popup-overlay.hidden{display:none;}
+.detail-popup{background:var(--surface);border-radius:var(--r-lg);padding:20px;width:100%;max-width:500px;max-height:88vh;overflow-y:auto;position:relative;box-shadow:0 16px 48px rgba(47,51,44,.2);}
+.detail-popup-close{position:absolute;top:12px;right:14px;border:none;background:transparent;font-size:1.3rem;cursor:pointer;color:var(--ink-soft);}
+.detail-popup h3{font-family:var(--fd);font-size:1.05rem;margin:0 0 12px;padding-right:24px;}
+.detail-section{margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border);}
+.detail-section:last-child{border-bottom:none;margin-bottom:0;}
+.detail-section-title{font-size:.8rem;font-weight:700;color:var(--ink-soft);margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+.detail-meal-row{display:flex;flex-direction:column;gap:2px;margin-bottom:8px;}
+.detail-meal-name{font-size:.88rem;font-weight:500;color:var(--ink);}
+.detail-meal-kcal{font-size:.76rem;color:var(--sprout);font-weight:700;}
+.detail-meal-memo{font-size:.8rem;color:var(--ink-soft);line-height:1.55;background:var(--surface-soft);border-radius:var(--r-sm);padding:6px 10px;margin-top:4px;white-space:pre-wrap;}
+.detail-advice{background:var(--sprout-soft);border-left:3px solid var(--sprout);border-radius:var(--r-sm);padding:10px 14px;font-size:.84rem;line-height:1.6;white-space:pre-wrap;color:var(--ink);}
+.detail-advice-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px;}
+
+/* ===== 詳細パネル（カレンダー下） ===== */
+.day-detail-panel{background:var(--surface-soft);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;margin-top:14px;}
+.day-detail-panel h4{font-family:var(--fd);font-size:.9rem;margin:0 0 10px;display:flex;align-items:center;gap:6px;}
+.detail-meal-block{margin-bottom:12px;padding-bottom:12px;border-bottom:1px dashed var(--border);}
+.detail-meal-block:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0;}
+.detail-meal-block-title{font-size:.82rem;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:6px;}
+.detail-meal-block-text{font-size:.84rem;color:var(--ink);margin-bottom:4px;}
+.detail-meal-block-kcal{font-size:.76rem;color:var(--sprout);font-weight:700;margin-bottom:4px;}
+.detail-meal-block-memo{font-size:.8rem;color:var(--ink-soft);background:var(--surface);border-radius:var(--r-sm);padding:6px 10px;white-space:pre-wrap;line-height:1.55;border:1px solid var(--border);}
+.detail-saved-advice{background:var(--good-bg);border:1px solid var(--good-br);border-radius:var(--r-md);padding:10px 14px;font-size:.82rem;line-height:1.6;color:var(--ink);white-space:pre-wrap;margin-top:10px;}
+.detail-saved-advice-title{font-size:.76rem;font-weight:700;color:#7A5A00;margin-bottom:6px;display:flex;align-items:center;gap:4px;}
+
+/* ===== メモ欄 ===== */
+.memo-textarea{width:100%;border:1px solid var(--border);border-radius:var(--r-sm);padding:6px 9px;font-family:var(--fb);font-size:.8rem;resize:none;height:64px;line-height:1.5;background:var(--surface-soft);color:var(--ink);margin-top:4px;}
+.memo-textarea:focus{outline:2px solid var(--sprout);outline-offset:1px;}
+.memo-label{font-size:.74rem;color:var(--ink-soft);margin-top:8px;display:block;}</style>
 </head>
 <body>
 
@@ -256,6 +288,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--fb);line-h
         <button class="btn-secondary" id="btnClearDay">この日をクリア</button>
       </div>
       <div id="dayAiCommentArea"></div>
+
+      <!-- カレンダー下 詳細パネル -->
+      <div class="day-detail-panel" id="dayDetailPanel" style="display:none;"></div>
     </div>
   </section>
 
@@ -278,6 +313,15 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--fb);line-h
 <!-- ツールチップ -->
 <div class="tooltip" id="tooltip">
   <button class="tt-close" id="ttClose">×</button>
+</div>
+
+<!-- 詳細ポップアップ（セルクリック） -->
+<div class="detail-popup-overlay hidden" id="detailPopup">
+  <div class="detail-popup">
+    <button class="detail-popup-close" id="detailPopupClose">×</button>
+    <h3 id="detailPopupTitle"></h3>
+    <div id="detailPopupBody"></div>
+  </div>
 </div>
 
 <!-- 写真モーダル -->
@@ -497,11 +541,13 @@ const state = {
 };
 
 function getMeal(ds){
-  if(!state.meals[ds]) state.meals[ds]={morning:{text:'',kcal:0},lunch:{text:'',kcal:0},dinner:{text:'',kcal:0},snack:{text:'',kcal:0},rating:null,comment:''};
-  // 旧データ互換：photosフィールドは無視
+  if(!state.meals[ds]) state.meals[ds]={morning:{text:'',kcal:0,memo:''},lunch:{text:'',kcal:0,memo:''},dinner:{text:'',kcal:0,memo:''},snack:{text:'',kcal:0,memo:''},rating:null,comment:'',aiAdvice:''};
+  // 旧データ互換
   MEAL_TYPES.forEach(t=>{
-    if(!state.meals[ds][t.id]) state.meals[ds][t.id]={text:'',kcal:0};
+    if(!state.meals[ds][t.id]) state.meals[ds][t.id]={text:'',kcal:0,memo:''};
+    if(state.meals[ds][t.id].memo===undefined) state.meals[ds][t.id].memo='';
   });
+  if(!state.meals[ds].aiAdvice) state.meals[ds].aiAdvice='';
   return state.meals[ds];
 }
 function totalKcal(ds){
@@ -803,13 +849,13 @@ JSONのみ返す（前後の説明不要）:{"rating":"good|ok|bad","comment":"�
   renderCalendarGrid(); renderWeekSummary();
 }
 
-// 評価結果HTML生成（「詳しく聞く」ボタン付き）
+// 評価結果HTML生成（「詳しく聞く」＋「アドバイス保存」ボタン付き）
 function renderEvalResult(r, comment, isLocal){
   const detailBtn = !isLocal
     ? `<button class="btn-secondary" style="margin-top:8px;font-size:.78rem;" onclick="askDetailAdvice()">💬 詳しいアドバイスを聞く</button>`
     : '';
   const localNote = isLocal
-    ? `<div class="ai-box" style="margin-top:6px;font-size:.78rem;">⚠️ LM Studio未接続のため簡易評価です。詳しいアドバイスはLM Studioを接続してください。</div>`
+    ? `<div class="ai-box" style="margin-top:6px;font-size:.78rem;">⚠️ LM Studio未接続のため簡易評価です。</div>`
     : '';
   return `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
@@ -817,6 +863,110 @@ function renderEvalResult(r, comment, isLocal){
       <span style="font-size:.82rem;color:var(--ink-soft);">${esc(comment)}</span>
     </div>
     ${detailBtn}${localNote}`;
+}
+
+// チャットのAI返答をその日のアドバイスとして保存
+function saveAdviceToDay(adviceText){
+  const ds = state.selectedDate;
+  getMeal(ds).aiAdvice = adviceText;
+  saveMeals();
+  renderDayDetailPanel();
+  // 保存確認トースト
+  const toast = document.createElement('div');
+  toast.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--sprout);color:#fff;padding:8px 20px;border-radius:20px;font-size:.84rem;z-index:99;box-shadow:0 4px 12px rgba(0,0,0,.2);';
+  toast.textContent='✓ アドバイスをこの日に保存しました';
+  document.body.appendChild(toast);
+  setTimeout(()=>toast.remove(), 2500);
+}
+
+// カレンダー下 詳細パネル描画
+function renderDayDetailPanel(){
+  const ds = state.selectedDate;
+  const meal = getMeal(ds);
+  const panel = document.getElementById('dayDetailPanel');
+  const hasMemo = MEAL_TYPES.some(t=>meal[t.id]?.memo);
+  const hasAdvice = !!meal.aiAdvice;
+
+  if(!hasAnyMeal(ds) && !hasMemo && !hasAdvice){
+    panel.style.display='none';
+    return;
+  }
+  panel.style.display='block';
+
+  let html = `<h4>📋 ${fmtLabel(ds)} 詳細メモ</h4>`;
+
+  // 各食事ブロックのメニュー＋メモ
+  MEAL_TYPES.forEach(t=>{
+    const b = meal[t.id];
+    if(!b.text && !b.memo) return;
+    html += `<div class="detail-meal-block">
+      <div class="detail-meal-block-title">${t.label}</div>`;
+    if(b.text) html += `<div class="detail-meal-block-text">${esc(b.text)}</div>`;
+    if(b.kcal) html += `<div class="detail-meal-block-kcal">🔥 ${b.kcal} kcal</div>`;
+    if(b.memo) html += `<div class="detail-meal-block-memo">${esc(b.memo)}</div>`;
+    html += `</div>`;
+  });
+
+  // 保存済みAIアドバイス
+  if(hasAdvice){
+    html += `<div class="detail-saved-advice">
+      <div class="detail-saved-advice-title">🤖 AIアドバイス（保存済み）</div>
+      ${esc(meal.aiAdvice)}
+    </div>`;
+  }
+
+  panel.innerHTML = html;
+}
+
+// 詳細ポップアップを表示（カレンダーセルクリック時）
+function showDetailPopup(ds){
+  const meal = getMeal(ds);
+  if(!hasAnyMeal(ds) && !meal.aiAdvice) return;
+
+  const popup = document.getElementById('detailPopup');
+  const title = document.getElementById('detailPopupTitle');
+  const body  = document.getElementById('detailPopupBody');
+
+  title.textContent = `${fmtLabel(ds)}の献立詳細`;
+
+  let html = '';
+
+  // 評価バッジ
+  if(meal.rating){
+    const r = RATINGS[meal.rating];
+    html += `<div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span class="rbadge ${r.cls}">${r.emoji} ${r.label}</span>
+      <span style="font-size:.82rem;color:var(--ink-soft);">${esc(meal.comment||'')}</span>
+    </div>`;
+  }
+
+  // 各食事ブロック
+  html += `<div class="detail-section">
+    <div class="detail-section-title">🍽️ 献立・レシピメモ</div>`;
+  MEAL_TYPES.forEach(t=>{
+    const b=meal[t.id];
+    if(!b.text && !b.memo) return;
+    html += `<div class="detail-meal-row">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-weight:700;font-size:.82rem;">${t.label}</span>
+        ${b.kcal?`<span style="font-size:.74rem;color:var(--sprout);font-weight:700;">${b.kcal}kcal</span>`:''}
+      </div>
+      ${b.text?`<div class="detail-meal-name">${esc(b.text)}</div>`:''}
+      ${b.memo?`<div class="detail-meal-memo">${esc(b.memo)}</div>`:''}
+    </div>`;
+  });
+  html += `</div>`;
+
+  // AIアドバイス
+  if(meal.aiAdvice){
+    html += `<div class="detail-section">
+      <div class="detail-section-title">🤖 AIアドバイス（保存済み）</div>
+      <div class="detail-advice">${esc(meal.aiAdvice)}</div>
+    </div>`;
+  }
+
+  body.innerHTML = html;
+  popup.classList.remove('hidden');
 }
 
 // 「詳しいアドバイスを聞く」→チャット欄に自動入力して送信
@@ -930,8 +1080,13 @@ function renderCalendarGrid(){
   grid.innerHTML=html;
   grid.querySelectorAll('.cal-cell').forEach(el=>{
     el.addEventListener('click',()=>{
+      const prevDate = state.selectedDate;
       state.selectedDate=el.dataset.date;
       renderCalendarGrid(); renderDayPanel();
+      // 同じ日を再クリック → 詳細ポップアップを表示
+      if(prevDate===el.dataset.date && hasAnyMeal(el.dataset.date)){
+        showDetailPopup(el.dataset.date);
+      }
       if(isTouch()) showTooltip(el,true);
     });
     el.addEventListener('mouseenter',()=>{ if(!isTouch()) showTooltip(el,false); });
@@ -1019,6 +1174,8 @@ function renderDayPanel(){
 
   // 食事ブロック描画
   renderMealBlocks();
+  // カレンダー下 詳細パネル描画
+  renderDayDetailPanel();
 }
 
 function renderMealBlocks(){
@@ -1044,6 +1201,8 @@ function renderMealBlocks(){
       </div>
       <div class="meal-block-body" data-body="${mt.id}">
         <textarea class="meal-textarea" data-type="${mt.id}" placeholder="${mt.placeholder}">${esc(block.text||'')}</textarea>
+        <span class="memo-label">📝 レシピ・メモ（備忘録・アイデアを自由に記録）</span>
+        <textarea class="memo-textarea" data-memo="${mt.id}" placeholder="例：醤油・みりん・砂糖で味付け。豆腐も追加すると美味しい。">${esc(block.memo||'')}</textarea>
         <div class="kcal-inline">
           <label>カロリー（kcal）：</label>
           <input class="kcal-input" type="number" data-kcal="${mt.id}" min="0" max="9999" value="${block.kcal||''}">
@@ -1078,15 +1237,15 @@ function renderMealBlocks(){
     // 保存ボタン → localStorage に保存
     div.querySelector(`[data-savebtn="${mt.id}"]`).addEventListener('click',()=>{
       const txt=div.querySelector(`[data-type="${mt.id}"].meal-textarea`).value.trim();
+      const memo=div.querySelector(`[data-memo="${mt.id}"]`).value.trim();
       const kcalVal=parseInt(div.querySelector(`[data-kcal="${mt.id}"]`).value)||0;
       meal[mt.id].text=txt;
+      meal[mt.id].memo=memo;
       meal[mt.id].kcal=kcalVal;
-      saveMeals(); // ← localStorage に保存
-      // 保存完了メッセージを一時表示
+      saveMeals();
       const note=div.querySelector(`#save-note-${mt.id}`);
       if(note){ note.style.display='block'; setTimeout(()=>note.style.display='none',2000); }
       renderDayPanel(); renderCalendarGrid(); renderWeekSummary();
-      // 昼・夜が揃っていれば自動評価
       const hasAll=MEAL_TYPES.filter(t=>t.id!=='snack').every(t=>meal[t.id].text);
       if(hasAll&&state.lmAvailable) evaluateDayMeal(ds);
     });
@@ -1151,7 +1310,13 @@ function renderLevelSelector(){
 ===================================================== */
 function renderChat(){
   const log=document.getElementById('chatLog');
-  log.innerHTML=state.chat.map(m=>`<div class="cmsg ${m.role==='user'?'user':m.text==='…'?'thinking':'ai'}">${esc(m.text)}</div>`).join('');
+  log.innerHTML=state.chat.map((m,i)=>{
+    const cls=m.role==='user'?'user':m.text==='…'?'thinking':'ai';
+    const saveBtn = (m.role==='ai' && m.text!=='…' && i===state.chat.length-1)
+      ? `<div style="margin-top:6px;"><button onclick="saveAdviceToDay(${JSON.stringify(m.text)})" style="background:var(--good-bg);border:1px solid var(--good-br);color:#7A5A00;border-radius:var(--r-sm);padding:4px 10px;font-size:.72rem;cursor:pointer;">💾 この日のアドバイスとして保存</button></div>`
+      : '';
+    return `<div class="cmsg ${cls}">${esc(m.text)}${saveBtn}</div>`;
+  }).join('');
   log.scrollTop=log.scrollHeight;
 }
 
@@ -1248,6 +1413,15 @@ document.getElementById('btnClearDay').addEventListener('click',()=>{
 document.getElementById('drawerToggle').addEventListener('click',()=>{document.getElementById('drawer').classList.add('open');document.getElementById('drawerOverlay').classList.add('open');});
 ['drawerClose','drawerOverlay'].forEach(id=>document.getElementById(id).addEventListener('click',()=>{document.getElementById('drawer').classList.remove('open');document.getElementById('drawerOverlay').classList.remove('open');}));
 // aiEndpoint・profileGoalのイベントは初期化ブロック内で設定済み
+
+// 詳細ポップアップのクローズ
+document.getElementById('detailPopupClose').addEventListener('click',()=>{
+  document.getElementById('detailPopup').classList.add('hidden');
+});
+document.getElementById('detailPopup').addEventListener('click',e=>{
+  if(e.target===document.getElementById('detailPopup'))
+    document.getElementById('detailPopup').classList.add('hidden');
+});
 
 // 写真モーダル
 document.getElementById('photoModalClose').addEventListener('click',closePhotoModal);
