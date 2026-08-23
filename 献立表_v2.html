@@ -871,16 +871,32 @@ function renderEvalResult(r, comment, isLocal){
 
 // チャットのAI返答をその日のアドバイスとして保存
 function saveAdviceToDay(adviceText){
+  if(!adviceText) return;
   const ds = state.selectedDate;
   getMeal(ds).aiAdvice = adviceText;
   saveMeals();
   renderDayDetailPanel();
-  // 保存確認トースト
+  renderChat(); // 保存済みボタンの表示を更新
+
+  // 保存確認トースト（大きめ・目立つ）
+  const existing = document.getElementById('advice-toast');
+  if(existing) existing.remove();
   const toast = document.createElement('div');
-  toast.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--sprout);color:#fff;padding:8px 20px;border-radius:20px;font-size:.84rem;z-index:99;box-shadow:0 4px 12px rgba(0,0,0,.2);';
-  toast.textContent='✓ アドバイスをこの日に保存しました';
+  toast.id = 'advice-toast';
+  toast.style.cssText = [
+    'position:fixed','bottom:32px','left:50%','transform:translateX(-50%)',
+    'background:var(--sprout)','color:#fff','padding:12px 24px',
+    'border-radius:24px','font-size:.9rem','font-weight:500',
+    'z-index:999','box-shadow:0 6px 20px rgba(0,0,0,.25)',
+    'display:flex','align-items:center','gap:8px','white-space:nowrap'
+  ].join(';');
+  toast.innerHTML = `✅ ${fmtLabel(ds)}のアドバイスを保存しました`;
   document.body.appendChild(toast);
-  setTimeout(()=>toast.remove(), 2500);
+  setTimeout(()=>toast.remove(), 3000);
+
+  // 詳細パネルまでスクロール
+  const panel = document.getElementById('dayDetailPanel');
+  if(panel) panel.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
 // カレンダー下 詳細パネル描画
@@ -1324,11 +1340,21 @@ function renderChat(){
   const log=document.getElementById('chatLog');
   log.innerHTML=state.chat.map((m,i)=>{
     const cls=m.role==='user'?'user':m.text==='…'?'thinking':'ai';
-    const saveBtn = (m.role==='ai' && m.text!=='…' && i===state.chat.length-1)
-      ? `<div style="margin-top:6px;"><button onclick="saveAdviceToDay(${JSON.stringify(m.text)})" style="background:var(--good-bg);border:1px solid var(--good-br);color:#7A5A00;border-radius:var(--r-sm);padding:4px 10px;font-size:.72rem;cursor:pointer;">💾 この日のアドバイスとして保存</button></div>`
+    const saveBtn = (m.role==='ai' && m.text!=='…')
+      ? `<div style="margin-top:6px;"><button class="save-advice-btn" data-idx="${i}" style="background:var(--good-bg);border:1px solid var(--good-br);color:#7A5A00;border-radius:var(--r-sm);padding:4px 10px;font-size:.72rem;cursor:pointer;">💾 この日のアドバイスとして保存</button></div>`
       : '';
     return `<div class="cmsg ${cls}">${esc(m.text)}${saveBtn}</div>`;
   }).join('');
+
+  // 保存ボタンのイベントをdata-idxで安全に設定
+  log.querySelectorAll('.save-advice-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const idx = parseInt(btn.dataset.idx);
+      const adviceText = state.chat[idx]?.text || '';
+      saveAdviceToDay(adviceText);
+    });
+  });
+
   log.scrollTop=log.scrollHeight;
 }
 
