@@ -602,7 +602,9 @@ async function callAI(messages, temperature=0.3, maxTokens=500){
   });
   if(!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
-  return (data.choices?.[0]?.message?.content||'').trim();
+  const raw = (data.choices?.[0]?.message?.content||'').trim();
+  // <think>...</think> タグを除去（Thinkingモード対応）
+  return raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
 }
 
 /* =====================================================
@@ -629,7 +631,9 @@ async function analyzePhotoWithAI(dataUrl, mealType){
   });
   if(!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
-  const content = (data.choices?.[0]?.message?.content||'').trim();
+  const raw = (data.choices?.[0]?.message?.content||'').trim();
+  // <think>...</think> タグを除去（Thinkingモード対応）
+  const content = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
   const jsonMatch = content.match(/\{[\s\S]*?\}/);
   if(jsonMatch){
     const parsed = JSON.parse(jsonMatch[0]);
@@ -1163,11 +1167,19 @@ function renderDayPanel(){
   // 評価ボタン有効化
   document.getElementById('btnEvalDay').disabled=!hasAnyMeal(state.selectedDate);
 
-  // AIコメント復元
+  // AIコメント復元（評価済みの場合）
   const ca=document.getElementById('dayAiCommentArea');
-  if(meal.comment&&meal.rating){
+  if(meal.comment && meal.rating){
     const r=RATINGS[meal.rating];
-    ca.innerHTML=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="rbadge ${r.cls}">${r.emoji} ${r.label}</span><span style="font-size:.8rem;color:var(--ink-soft);">${esc(meal.comment)}</span></div><p style="font-size:.74rem;color:var(--ink-soft);margin:0;">再評価するには「この日の栄養を評価」ボタンを押してください。</p>`;
+    ca.innerHTML=`
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+        <span class="rbadge ${r.cls}">${r.emoji} ${r.label}</span>
+        <span style="font-size:.8rem;color:var(--ink-soft);">${esc(meal.comment)}</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
+        <button class="btn-secondary" style="font-size:.78rem;" onclick="askDetailAdvice()">💬 詳しいアドバイスを聞く</button>
+        <span style="font-size:.72rem;color:var(--ink-soft);align-self:center;">再評価するには「この日の栄養を評価」ボタンを押してください。</span>
+      </div>`;
   } else {
     ca.innerHTML='';
   }
