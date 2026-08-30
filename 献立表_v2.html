@@ -860,7 +860,51 @@ const LEVELS=[{id:'diet',label:'🥗 ダイエット'},{id:'balance',label:'🍱
 const TIPS={diet:'🥗 ダイエットモード：カロリー・糖質・脂質のバランスを中心にアドバイスします。',balance:'🍱 バランスモード：五大栄養素をまんべんなく摂ることを目標にアドバイスします。',muscle:'💪 筋トレモード：たんぱく質摂取量を重視してアドバイスします。'};
 const RATINGS={good:{label:'◎ 良い',cls:'good',cellCls:'r-good',emoji:'🟡'},ok:{label:'△ 普通',cls:'ok',cellCls:'r-ok',emoji:'🔵'},bad:{label:'✕ 要改善',cls:'bad',cellCls:'r-bad',emoji:'🔴'}};
 const MEAL_TYPES=[{id:'morning',label:'🌅 朝食',placeholder:'例：納豆ご飯、味噌汁、卵焼き'},{id:'lunch',label:'☀️ 昼食',placeholder:'例：茄子と豚肉のすき焼き味、わかめの味噌汁'},{id:'dinner',label:'🌙 夕食',placeholder:'例：油揚げとマイタケのお煮しめ、ご飯'},{id:'snack',label:'🍪 おやつ',placeholder:'例：りんご、ヨーグルト'}];
-const CALORIE_DB=[{k:['ご飯','白米','ごはん'],kcal:250},{k:['玄米'],kcal:220},{k:['パン','食パン'],kcal:200},{k:['うどん'],kcal:190},{k:['そば'],kcal:180},{k:['ラーメン'],kcal:470},{k:['パスタ'],kcal:380},{k:['おにぎり'],kcal:180},{k:['鶏肉','チキン','鶏'],kcal:200},{k:['豚肉','豚'],kcal:260},{k:['牛肉','牛'],kcal:300},{k:['サーモン','鮭'],kcal:200},{k:['マグロ'],kcal:180},{k:['エビ','海老'],kcal:80},{k:['ハンバーグ'],kcal:280},{k:['唐揚げ','から揚げ'],kcal:350},{k:['卵','たまご','玉子'],kcal:80},{k:['豆腐'],kcal:55},{k:['納豆'],kcal:90},{k:['油揚げ'],kcal:120},{k:['なす','茄子'],kcal:20},{k:['トマト'],kcal:20},{k:['キャベツ'],kcal:25},{k:['ほうれん草'],kcal:20},{k:['もやし'],kcal:15},{k:['にんじん','人参'],kcal:40},{k:['じゃがいも'],kcal:80},{k:['ブロッコリー'],kcal:35},{k:['きのこ','マイタケ','しいたけ','えのき'],kcal:25},{k:['わかめ'],kcal:12},{k:['味噌汁','みそ汁'],kcal:40},{k:['牛乳','ミルク'],kcal:130},{k:['ヨーグルト'],kcal:60},{k:['りんご','リンゴ'],kcal:80},{k:['バナナ'],kcal:90},{k:['ケーキ'],kcal:350},{k:['チョコ','チョコレート'],kcal:140},{k:['アイス'],kcal:200},{k:['カレー'],kcal:450},{k:['シチュー'],kcal:300},{k:['炒め物'],kcal:220},{k:['煮物','煮しめ','おでん'],kcal:150},{k:['すき焼き'],kcal:280},{k:['天ぷら'],kcal:300},{k:['刺身','さしみ'],kcal:120},{k:['丼','どんぶり'],kcal:480},{k:['チャーハン','炒飯'],kcal:400},{k:['餃子','ギョーザ'],kcal:200}];
+const CALORIE_DB=[
+  // 主食
+  {k:['ご飯','白米','ごはん'],kcal:250},{k:['玄米'],kcal:220},{k:['パン','食パン','トースト'],kcal:200},
+  {k:['うどん'],kcal:190},{k:['そば'],kcal:180},{k:['ラーメン'],kcal:470},{k:['パスタ','スパゲッティ'],kcal:380},
+  {k:['おにぎり'],kcal:180},{k:['チャーハン','炒飯'],kcal:400},{k:['丼','どんぶり'],kcal:480},
+  // 肉・魚
+  {k:['鶏肉','チキン','鶏'],kcal:200},{k:['豚肉','豚'],kcal:260},{k:['牛肉','牛'],kcal:300},
+  {k:['サーモン','鮭'],kcal:200},{k:['マグロ'],kcal:180},{k:['エビ','海老'],kcal:80},
+  {k:['アジ','鯵','アジフライ'],kcal:280},{k:['サバ','鯖'],kcal:220},{k:['イワシ','鰯'],kcal:190},
+  {k:['タラ','鱈'],kcal:140},{k:['カツオ','鰹'],kcal:165},{k:['ブリ','鰤'],kcal:257},
+  {k:['ちくわ','竹輪'],kcal:120},{k:['さつま揚げ','薩摩揚げ'],kcal:140},{k:['かまぼこ','蒲鉾'],kcal:95},
+  {k:['ハム'],kcal:130},{k:['ベーコン'],kcal:180},{k:['ソーセージ','ウインナー'],kcal:200},
+  {k:['ハンバーグ'],kcal:280},{k:['唐揚げ','から揚げ'],kcal:350},{k:['フライ'],kcal:300},
+  {k:['天ぷら'],kcal:300},{k:['刺身','さしみ'],kcal:120},{k:['すき焼き'],kcal:280},
+  {k:['餃子','ギョーザ'],kcal:200},{k:['焼き鳥','やきとり'],kcal:180},
+  // 卵・大豆
+  {k:['卵','たまご','玉子','いり卵','炒り卵','スクランブル'],kcal:150},
+  {k:['豆腐'],kcal:55},{k:['納豆'],kcal:90},{k:['油揚げ'],kcal:120},{k:['厚揚げ'],kcal:140},
+  // 野菜
+  {k:['ピーマン'],kcal:15},{k:['なす','茄子'],kcal:20},{k:['トマト'],kcal:20},
+  {k:['キャベツ','千切りキャベツ'],kcal:25},{k:['ほうれん草'],kcal:20},{k:['もやし'],kcal:15},
+  {k:['にんじん','人参'],kcal:40},{k:['じゃがいも','じゃが芋'],kcal:80},{k:['さつまいも','サツマイモ'],kcal:130},
+  {k:['ブロッコリー'],kcal:35},{k:['きのこ','マイタケ','舞茸','しいたけ','えのき','エリンギ'],kcal:25},
+  {k:['たまねぎ','玉ねぎ','玉葱'],kcal:35},{k:['長ねぎ','ねぎ','葱'],kcal:20},
+  {k:['レタス'],kcal:12},{k:['きゅうり','胡瓜'],kcal:14},{k:['大根','だいこん'],kcal:18},
+  {k:['ごぼう','牛蒡'],kcal:65},{k:['れんこん','蓮根'],kcal:66},{k:['かぼちゃ','南瓜'],kcal:90},
+  {k:['とうもろこし','コーン'],kcal:90},{k:['アスパラ'],kcal:22},{k:['小松菜'],kcal:13},
+  // 海藻・汁物
+  {k:['わかめ'],kcal:12},{k:['味噌汁','みそ汁'],kcal:40},{k:['スープ'],kcal:50},
+  // 乳製品・飲料
+  {k:['牛乳','ミルク'],kcal:130},{k:['ヨーグルト'],kcal:60},{k:['チーズ'],kcal:100},
+  {k:['ビール'],kcal:150},{k:['ハイボール'],kcal:70},{k:['日本酒','酒'],kcal:180},
+  {k:['ワイン'],kcal:80},{k:['酎ハイ','チューハイ'],kcal:120},{k:['焼酎'],kcal:140},
+  {k:['ジュース'],kcal:100},{k:['コーヒー'],kcal:10},{k:['緑茶','お茶'],kcal:5},
+  // 果物
+  {k:['りんご','リンゴ'],kcal:80},{k:['バナナ'],kcal:90},{k:['みかん','蜜柑'],kcal:45},
+  {k:['ぶどう','葡萄'],kcal:60},{k:['いちご','苺'],kcal:35},{k:['もも','桃'],kcal:40},
+  // 菓子・デザート
+  {k:['ケーキ'],kcal:350},{k:['チョコ','チョコレート'],kcal:140},{k:['アイス'],kcal:200},
+  {k:['せんべい','煎餅'],kcal:180},{k:['クッキー'],kcal:200},{k:['プリン'],kcal:120},
+  // 料理
+  {k:['カレー'],kcal:450},{k:['シチュー'],kcal:300},{k:['炒め物','いため'],kcal:220},
+  {k:['煮物','煮しめ','おでん'],kcal:150},{k:['酢の物'],kcal:60},{k:['和え物','あえもの'],kcal:80},
+  {k:['サラダ'],kcal:80},{k:['漬物','つけもの'],kcal:20},{k:['ラーメン'],kcal:470},
+];
 function estimateCalorieLocal(text){ if(!text||!text.trim()) return 0; let total=0; const lower=text.toLowerCase(); for(const item of CALORIE_DB){ if(item.k.some(k=>lower.includes(k.toLowerCase()))) total+=item.kcal; } return total||Math.round(text.length*2.5+80); }
 function fmtDate(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function parseLocal(s){const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);}
@@ -947,7 +991,7 @@ function renderWeekSummary(){ const el=document.getElementById('weekSummary'); c
 
 function renderLevelSelector(){ const el=document.getElementById('levelSelector'); el.innerHTML=LEVELS.map(l=>`<button class="level-btn${state.goalLevel===l.id?' active':''}" data-level="${l.id}">${l.label}</button>`).join(''); el.querySelectorAll('.level-btn').forEach(btn=>{ btn.addEventListener('click',()=>{ state.goalLevel=btn.dataset.level; document.getElementById('profileGoal').value=state.goalLevel; renderLevelSelector(); document.getElementById('tipBanner').textContent=TIPS[state.goalLevel]; }); }); }
 
-function renderChat(){ const log=document.getElementById('chatLog'); log.innerHTML=state.chat.map((m,i)=>{ const cls=m.role==='user'?'user':m.text==='…'?'thinking':'ai'; const saveBtn=(m.role==='ai'&&m.text!=='…')?`<div style="margin-top:6px;"><button onclick="saveAdviceToDay(${JSON.stringify(m.text)})" style="background:var(--good-bg);border:1px solid var(--good-br);color:#7A5A00;border-radius:var(--r-sm);padding:4px 10px;font-size:.72rem;cursor:pointer;">💾 この日のアドバイスとして保存</button></div>`:''; return `<div class="cmsg ${cls}">${esc(m.text)}${saveBtn}</div>`; }).join(''); log.scrollTop=log.scrollHeight; }
+function renderChat(){ const log=document.getElementById('chatLog'); log.innerHTML=state.chat.map((m,i)=>{ const cls=m.role==='user'?'user':m.text==='…'?'thinking':'ai'; const saveBtn=(m.role==='ai'&&m.text!=='…')?`<div style="margin-top:6px;"><button data-chatidx="${i}" class="save-advice-btn" style="background:var(--good-bg);border:1px solid var(--good-br);color:#7A5A00;border-radius:var(--r-sm);padding:4px 10px;font-size:.72rem;cursor:pointer;">💾 この日のアドバイスとして保存</button></div>`:''; return `<div class="cmsg ${cls}">${esc(m.text)}${saveBtn}</div>`; }).join(''); log.scrollTop=log.scrollHeight; log.querySelectorAll('.save-advice-btn').forEach(btn=>{ btn.addEventListener('click',()=>{ const idx=parseInt(btn.dataset.chatidx); saveAdviceToDay(state.chat[idx]?.text||''); }); }); }
 
 function renderCalNav(){ const ys=document.getElementById('yearSelect'); if(!ys.options.length){ const base=KON_TODAY_OBJ.getFullYear(); for(let y=base-2;y<=base+5;y++){ const o=document.createElement('option'); o.value=y; o.textContent=`${y}年`; ys.appendChild(o); } } ys.value=state.calendar.year; const tabs=document.getElementById('monthTabs'); tabs.innerHTML=''; for(let m=1;m<=12;m++){ const btn=document.createElement('button'); btn.type='button'; btn.className='month-tab'+(m===state.calendar.month?' active':''); btn.textContent=`${m}月`; btn.addEventListener('click',()=>{ state.calendar.month=m; renderCalNav(); renderCalendarGrid(); renderWeekSummary(); }); tabs.appendChild(btn); } }
 function changeMonth(d){ let m=state.calendar.month+d,y=state.calendar.year; if(m<1){m=12;y--;} if(m>12){m=1;y++;} state.calendar.year=y; state.calendar.month=m; renderCalNav(); renderCalendarGrid(); renderWeekSummary(); }
