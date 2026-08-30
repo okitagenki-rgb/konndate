@@ -327,6 +327,29 @@ body{font-family:var(--fb);background:var(--bg);color:var(--ink);min-height:100v
 .prow{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .export-btns{display:flex;gap:7px;flex-wrap:wrap;}
 
+/* 買い物メモ */
+.shopping-block{border:1px solid var(--good-br);border-radius:var(--r-md);overflow:hidden;margin-top:4px;}
+.shopping-block-head{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--good-bg);cursor:pointer;user-select:none;}
+.shopping-block-head-left{font-size:.85rem;font-weight:700;color:#7A5A00;}
+.shopping-block-body{padding:10px;display:flex;flex-direction:column;gap:8px;}
+.shopping-block-body.collapsed{display:none;}
+.shop-item-row{display:flex;align-items:center;gap:6px;padding:5px 4px;border-radius:var(--r-sm);transition:background .15s;}
+.shop-item-row.checked{opacity:.45;}
+.shop-item-row.checked .shop-name{text-decoration:line-through;}
+.shop-checkbox{width:18px;height:18px;accent-color:var(--sprout);cursor:pointer;flex-shrink:0;}
+.shop-name{flex:1;font-size:.84rem;background:transparent;border:none;outline:none;font-family:var(--fb);color:var(--ink);padding:2px 4px;border-radius:4px;}
+.shop-name:focus{background:var(--surface-soft);}
+.shop-cat{font-size:.72rem;padding:2px 7px;border-radius:10px;border:none;background:var(--surface-soft);color:var(--ink-soft);font-family:var(--fb);cursor:pointer;}
+.shop-qty{width:52px;font-size:.78rem;background:var(--surface-soft);border:1px solid var(--border);border-radius:4px;padding:3px 5px;font-family:var(--fb);color:var(--ink);text-align:center;}
+.shop-price{width:72px;font-size:.78rem;background:var(--surface-soft);border:1px solid var(--border);border-radius:4px;padding:3px 5px;font-family:var(--fb);color:var(--ink);text-align:right;}
+.shop-del{background:none;border:none;color:var(--danger);cursor:pointer;font-size:15px;flex-shrink:0;padding:0 2px;}
+.shop-add-btn{background:none;border:1px dashed var(--border);border-radius:var(--r-sm);padding:5px 10px;font-size:.78rem;color:var(--ink-soft);cursor:pointer;width:100%;font-family:var(--fb);}
+.shop-add-btn:hover{border-color:var(--good-br);color:#7A5A00;}
+.shop-footer{display:flex;align-items:center;justify-content:space-between;padding-top:6px;border-top:1px dashed var(--border);font-size:.78rem;color:var(--ink-soft);}
+.shop-reset-btn{background:none;border:1px solid var(--border);border-radius:var(--r-sm);padding:3px 10px;font-size:.74rem;cursor:pointer;color:var(--ink-soft);font-family:var(--fb);}
+.shop-reset-btn:hover{border-color:var(--danger);color:var(--danger);}
+.cell-shop{font-size:.62rem;color:#7A5A00;font-weight:700;}
+
 /* Toast */
 #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface);border:1px solid var(--border);color:var(--ink);padding:11px 22px;border-radius:24px;font-size:13px;box-shadow:var(--shadow);transition:.3s;z-index:9999;white-space:nowrap;}
 #toast.show{transform:translateX(-50%) translateY(0);}
@@ -520,6 +543,7 @@ body{font-family:var(--fb);background:var(--bg);color:var(--ink);min-height:100v
         </div>
         <div class="kcal-summary" id="kcalSummary" style="display:none;"></div>
         <div class="meal-blocks" id="mealBlocks"></div>
+        <div id="shoppingBlock"></div>
         <div class="day-actions">
           <button class="btn-ai-eval" id="btnEvalDay" disabled>🤖 この日の栄養を評価</button>
           <button class="btn btn-secondary btn-sm" id="btnClearDay">この日をクリア</button>
@@ -857,7 +881,8 @@ const state={
   chat:[{role:'ai',text:'こんにちは！📷 写真ボタンで食事を撮影するか、テキストで献立を入力してください。\n\n💾 入力データはこの端末のブラウザに自動保存されます。'}],
   aiEndpoint:'http://192.168.11.4:1234/v1/chat/completions',
   lmAvailable:false,
-  photoModal:{dataUrl:null,selectedType:null,result:null}
+  photoModal:{dataUrl:null,selectedType:null,result:null},
+  shopBlockCollapsed:false
 };
 
 function getMeal(ds){ if(!state.meals[ds]) state.meals[ds]={morning:{text:'',kcal:0,memo:''},lunch:{text:'',kcal:0,memo:''},dinner:{text:'',kcal:0,memo:''},snack:{text:'',kcal:0,memo:''},rating:null,comment:'',aiAdvice:''}; MEAL_TYPES.forEach(t=>{ if(!state.meals[ds][t.id]) state.meals[ds][t.id]={text:'',kcal:0,memo:''}; if(state.meals[ds][t.id].memo===undefined) state.meals[ds][t.id].memo=''; }); if(!state.meals[ds].aiAdvice) state.meals[ds].aiAdvice=''; return state.meals[ds]; }
@@ -906,14 +931,14 @@ async function sendChat(){ const input=document.getElementById('chatInput'); con
 
 function getCalDays(y,m){ const cells=[]; const fd=new Date(y,m-1,1); const sw=fd.getDay(); const dim=new Date(y,m,0).getDate(); const total=Math.ceil((sw+dim)/7)*7; for(let i=0;i<total;i++){ const d=new Date(y,m-1,i-sw+1); cells.push({ds:fmtDate(d),day:d.getDate(),wd:d.getDay(),in:d.getMonth()===m-1}); } return cells; }
 
-function renderCalendarGrid(){ const grid=document.getElementById('calendarGrid'); const wdays=['日','月','火','水','木','金','土']; let html=''; wdays.forEach((w,i)=>html+=`<div class="cal-wd${i===0?' sun':i===6?' sat':''}">${w}</div>`); getCalDays(state.calendar.year,state.calendar.month).forEach(cell=>{ const meal=getMeal(cell.ds); const kcal=totalKcal(cell.ds); let cls='cal-cell'; if(!cell.in) cls+=' out'; if(cell.wd===0) cls+=' sun'; if(cell.wd===6) cls+=' sat'; if(cell.ds===state.selectedDate) cls+=' selected'; if(cell.ds===KON_TODAY) cls+=' istoday'; if(meal.rating) cls+=' '+RATINGS[meal.rating].cellCls; const rbadge=meal.rating?`<span class="cell-rbadge">${RATINGS[meal.rating].emoji}</span>`:''; const kcalBadge=kcal>0?`<span class="cell-kcal">${kcal}kcal</span>`:''; const menuRows=MEAL_TYPES.map(t=>{ const b=meal[t.id]; if(!b?.text) return ''; const icon=t.label.match(/./u)[0]; return `<div class="cell-mrow"><span class="cell-micon">${icon}</span><span class="cell-mtext">${esc(b.text)}</span></div>`; }).join(''); const commentRow=meal.comment?`<div class="cell-comment">💬${esc(meal.comment)}</div>`:''; html+=`<div class="${cls}" data-date="${cell.ds}"><div class="cell-head"><div class="cdate">${cell.day}</div><div style="display:flex;gap:2px;align-items:center;">${rbadge}${kcalBadge}</div></div><div class="cell-menu">${menuRows}</div>${commentRow}</div>`; }); grid.innerHTML=html; grid.querySelectorAll('.cal-cell').forEach(el=>{ el.addEventListener('click',()=>{ const prevDate=state.selectedDate; state.selectedDate=el.dataset.date; renderCalendarGrid(); renderDayPanel(); if(prevDate===el.dataset.date&&hasAnyMeal(el.dataset.date)) showDetailPopup(el.dataset.date); if(isTouch()) showTooltip(el,true); }); el.addEventListener('mouseenter',()=>{ if(!isTouch()) showTooltip(el,false); }); el.addEventListener('mouseleave',()=>{ if(!isTouch()) hideTooltip(); }); }); }
+function renderCalendarGrid(){ const grid=document.getElementById('calendarGrid'); const wdays=['日','月','火','水','木','金','土']; let html=''; wdays.forEach((w,i)=>html+=`<div class="cal-wd${i===0?' sun':i===6?' sat':''}">${w}</div>`); getCalDays(state.calendar.year,state.calendar.month).forEach(cell=>{ const meal=getMeal(cell.ds); const kcal=totalKcal(cell.ds); let cls='cal-cell'; if(!cell.in) cls+=' out'; if(cell.wd===0) cls+=' sun'; if(cell.wd===6) cls+=' sat'; if(cell.ds===state.selectedDate) cls+=' selected'; if(cell.ds===KON_TODAY) cls+=' istoday'; if(meal.rating) cls+=' '+RATINGS[meal.rating].cellCls; const rbadge=meal.rating?`<span class="cell-rbadge">${RATINGS[meal.rating].emoji}</span>`:''; const kcalBadge=kcal>0?`<span class="cell-kcal">${kcal}kcal</span>`:''; const menuRows=MEAL_TYPES.map(t=>{ const b=meal[t.id]; if(!b?.text) return ''; const icon=t.label.match(/./u)[0]; return `<div class="cell-mrow"><span class="cell-micon">${icon}</span><span class="cell-mtext">${esc(b.text)}</span></div>`; }).join(''); const commentRow=meal.comment?`<div class="cell-comment">💬${esc(meal.comment)}</div>`:''; const shopRow=hasShopItems(cell.ds)?`<div class="cell-shop">🛒</div>`:''; html+=`<div class="${cls}" data-date="${cell.ds}"><div class="cell-head"><div class="cdate">${cell.day}</div><div style="display:flex;gap:2px;align-items:center;">${rbadge}${kcalBadge}</div></div><div class="cell-menu">${menuRows}</div>${commentRow}${shopRow}</div>`; }); grid.innerHTML=html; grid.querySelectorAll('.cal-cell').forEach(el=>{ el.addEventListener('click',()=>{ const prevDate=state.selectedDate; state.selectedDate=el.dataset.date; renderCalendarGrid(); renderDayPanel(); if(prevDate===el.dataset.date&&hasAnyMeal(el.dataset.date)) showDetailPopup(el.dataset.date); if(isTouch()) showTooltip(el,true); }); el.addEventListener('mouseenter',()=>{ if(!isTouch()) showTooltip(el,false); }); el.addEventListener('mouseleave',()=>{ if(!isTouch()) hideTooltip(); }); }); }
 
 function isTouch(){ return window.matchMedia('(hover:none),(pointer:coarse)').matches; }
 function showTooltip(el,touch){ const ds=el.dataset.date; const meal=getMeal(ds); if(!hasAnyMeal(ds)&&!meal.rating){ hideTooltip(); return; } const tt=document.getElementById('tooltip'); tt.classList.toggle('touch',!!touch); const kcal=totalKcal(ds); const rows=MEAL_TYPES.map(t=>{ const b=meal[t.id]; if(!b?.text) return ''; return `<div class="tt-row"><span class="tt-lbl">${t.label}</span><span class="tt-val">${esc(b.text)}${b.kcal?` <b style="color:var(--sprout)">${b.kcal}kcal</b>`:''}</span></div>`; }).join(''); tt.innerHTML=`${touch?'<button class="tt-close" id="ttClose">×</button>':''}<div class="tt-title">${fmtLabel(ds)}</div>${rows}${kcal>0?`<div class="tt-row"><span class="tt-lbl">合計</span><span class="tt-kcal">${kcal} kcal</span></div>`:''} ${meal.rating?`<div class="tt-row"><span class="tt-lbl">評価</span><span>${RATINGS[meal.rating].emoji} ${RATINGS[meal.rating].label}</span></div>`:''} ${meal.comment?`<div class="tt-comment">💬 ${esc(meal.comment)}</div>`:''}`; if(touch) tt.querySelector('#ttClose')?.addEventListener('click',e=>{ e.stopPropagation(); hideTooltip(); }); tt.style.display='block'; const rect=el.getBoundingClientRect(); let left=rect.left,top=rect.bottom+4; tt.style.left=`${left}px`; tt.style.top=`${top}px`; const tr=tt.getBoundingClientRect(); if(tr.right>window.innerWidth-8) left=window.innerWidth-tr.width-8; if(left<8) left=8; if(tr.bottom>window.innerHeight-8) top=rect.top-tr.height-4; tt.style.left=`${left}px`; tt.style.top=`${top}px`; }
 function hideTooltip(){ const t=document.getElementById('tooltip'); t.style.display='none'; t.classList.remove('touch'); }
 document.addEventListener('click',e=>{ const tt=document.getElementById('tooltip'); if(!tt.classList.contains('touch')) return; if(tt.contains(e.target)||e.target.closest?.('.cal-cell')) return; hideTooltip(); });
 
-function renderDayPanel(){ document.getElementById('dayPanelTitle').textContent=`${fmtLabel(state.selectedDate)}の献立`; const meal=getMeal(state.selectedDate); const total=totalKcal(state.selectedDate); const ks=document.getElementById('kcalSummary'); if(total>0){ ks.style.display='flex'; const blocks=MEAL_TYPES.map(t=>{ const b=meal[t.id]; return b?.kcal?`<span class="kcal-block">${t.label.match(/./u)[0]} ${b.kcal}kcal</span>`:''; }).join(''); ks.innerHTML=`<span class="kcal-total">🔥 合計 ${total} kcal</span>${blocks}`; } else{ ks.style.display='none'; } document.getElementById('dayRatingBadge').innerHTML=meal.rating?`<span class="rbadge ${RATINGS[meal.rating].cls}">${RATINGS[meal.rating].emoji} ${RATINGS[meal.rating].label}</span>`:''; document.getElementById('btnEvalDay').disabled=!hasAnyMeal(state.selectedDate); const ca=document.getElementById('dayAiCommentArea'); if(meal.comment&&meal.rating){ const r=RATINGS[meal.rating]; ca.innerHTML=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;"><span class="rbadge ${r.cls}">${r.emoji} ${r.label}</span><span style="font-size:.8rem;color:var(--ink-soft);">${esc(meal.comment)}</span></div><button class="btn btn-secondary btn-sm" style="margin-top:4px;" onclick="askDetailAdvice()">💬 詳しいアドバイスを聞く</button>`; } else{ ca.innerHTML=''; } renderMealBlocks(); renderDayDetailPanel(); }
+function renderDayPanel(){ document.getElementById('dayPanelTitle').textContent=`${fmtLabel(state.selectedDate)}の献立`; const meal=getMeal(state.selectedDate); const total=totalKcal(state.selectedDate); const ks=document.getElementById('kcalSummary'); if(total>0){ ks.style.display='flex'; const blocks=MEAL_TYPES.map(t=>{ const b=meal[t.id]; return b?.kcal?`<span class="kcal-block">${t.label.match(/./u)[0]} ${b.kcal}kcal</span>`:''; }).join(''); ks.innerHTML=`<span class="kcal-total">🔥 合計 ${total} kcal</span>${blocks}`; } else{ ks.style.display='none'; } document.getElementById('dayRatingBadge').innerHTML=meal.rating?`<span class="rbadge ${RATINGS[meal.rating].cls}">${RATINGS[meal.rating].emoji} ${RATINGS[meal.rating].label}</span>`:''; document.getElementById('btnEvalDay').disabled=!hasAnyMeal(state.selectedDate); const ca=document.getElementById('dayAiCommentArea'); if(meal.comment&&meal.rating){ const r=RATINGS[meal.rating]; ca.innerHTML=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;"><span class="rbadge ${r.cls}">${r.emoji} ${r.label}</span><span style="font-size:.8rem;color:var(--ink-soft);">${esc(meal.comment)}</span></div><button class="btn btn-secondary btn-sm" style="margin-top:4px;" onclick="askDetailAdvice()">💬 詳しいアドバイスを聞く</button>`; } else{ ca.innerHTML=''; } renderMealBlocks(); renderShoppingBlock(state.selectedDate); renderDayDetailPanel(); }
 
 let pendingPhotoType='lunch';
 function renderMealBlocks(){ const container=document.getElementById('mealBlocks'); const ds=state.selectedDate; const meal=getMeal(ds); container.innerHTML=''; MEAL_TYPES.forEach(mt=>{ const block=meal[mt.id]; const div=document.createElement('div'); div.className='meal-block'; const kcalStr=block.kcal?`${block.kcal} kcal`:''; const photoLabel=state.lmAvailable?'📷 写真で認識':'📷 写真から入力'; div.innerHTML=`<div class="meal-block-head"><span class="meal-block-head-left">${mt.label}</span><span class="meal-block-kcal">${kcalStr}</span></div><div class="meal-block-body"><textarea class="meal-textarea" data-type="${mt.id}" placeholder="${mt.placeholder}">${esc(block.text||'')}</textarea><span class="memo-label">📝 レシピ・メモ</span><textarea class="memo-textarea" data-memo="${mt.id}" placeholder="例：醤油・みりんで味付け。">${esc(block.memo||'')}</textarea><div class="kcal-inline"><label>カロリー（kcal）：</label><input class="kcal-input" type="number" data-kcal="${mt.id}" min="0" max="9999" value="${block.kcal||''}"><button class="btn btn-secondary btn-sm" data-calcbtn="${mt.id}">自動計算</button></div><div class="meal-block-actions"><button class="btn-save" data-savebtn="${mt.id}">💾 保存</button><button class="btn-photo" data-photobtn="${mt.id}">${photoLabel}</button></div><div id="save-note-${mt.id}" style="font-size:.72rem;color:var(--sprout);display:none;margin-top:4px;">✓ 保存しました</div></div>`; container.appendChild(div); div.querySelector('.meal-block-head').addEventListener('click',()=>div.querySelector('.meal-block-body').classList.toggle('collapsed')); div.querySelector(`[data-type="${mt.id}"]`).addEventListener('input',e=>div.querySelector(`[data-kcal="${mt.id}"]`).value=estimateCalorieLocal(e.target.value)); div.querySelector(`[data-calcbtn="${mt.id}"]`).addEventListener('click',()=>div.querySelector(`[data-kcal="${mt.id}"]`).value=estimateCalorieLocal(div.querySelector(`[data-type="${mt.id}"]`).value)); div.querySelector(`[data-savebtn="${mt.id}"]`).addEventListener('click',()=>{ const txt=div.querySelector(`[data-type="${mt.id}"]`).value.trim(); const memo=div.querySelector(`[data-memo="${mt.id}"]`).value.trim(); const kcalVal=parseInt(div.querySelector(`[data-kcal="${mt.id}"]`).value)||0; meal[mt.id].text=txt; meal[mt.id].memo=memo; meal[mt.id].kcal=kcalVal; saveMeals(); const note=div.querySelector(`#save-note-${mt.id}`); if(note){ note.style.display='block'; setTimeout(()=>note.style.display='none',2000); } renderDayPanel(); renderCalendarGrid(); renderWeekSummary(); const hasAll=MEAL_TYPES.filter(t=>t.id!=='snack').every(t=>meal[t.id].text); if(hasAll&&state.lmAvailable) evaluateDayMeal(ds); }); div.querySelector(`[data-photobtn="${mt.id}"]`).addEventListener('click',()=>{ pendingPhotoType=mt.id; document.getElementById('fileInput').click(); }); }); }
@@ -928,6 +953,57 @@ function renderCalNav(){ const ys=document.getElementById('yearSelect'); if(!ys.
 function changeMonth(d){ let m=state.calendar.month+d,y=state.calendar.year; if(m<1){m=12;y--;} if(m>12){m=1;y++;} state.calendar.year=y; state.calendar.month=m; renderCalNav(); renderCalendarGrid(); renderWeekSummary(); }
 
 function dlFile(name,content,mime){ const b=new Blob([content],{type:mime+';charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=name; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
+
+// ===== 買い物メモ =====
+const SHOP_CATS=['食品','日用品','衣類','雑貨','固定費','その他'];
+function getShopList(ds){ const meal=getMeal(ds); if(!meal.shopList) meal.shopList=[]; return meal.shopList; }
+function hasShopItems(ds){ return getShopList(ds).length>0; }
+function saveShopList(ds){ saveMeals(); renderCalendarGrid(); }
+
+function renderShoppingBlock(ds){
+  const list=getShopList(ds);
+  const container=document.getElementById('shoppingBlock');
+  if(!container) return;
+  const checkedCount=list.filter(i=>i.checked).length;
+  const totalEst=list.reduce((s,i)=>s+(parseInt(i.price)||0),0);
+  const itemsHtml=list.map((item,idx)=>`
+    <div class="shop-item-row${item.checked?' checked':''}">
+      <input type="checkbox" class="shop-checkbox" ${item.checked?'checked':''} onchange="toggleShopItem('${ds}',${idx})">
+      <input type="text" class="shop-name" value="${escH(item.name||'')}" placeholder="品名" onchange="updateShopItem('${ds}',${idx},'name',this.value)">
+      <select class="shop-cat" onchange="updateShopItem('${ds}',${idx},'cat',this.value)">${SHOP_CATS.map(c=>`<option value="${c}" ${item.cat===c?'selected':''}>${c}</option>`).join('')}</select>
+      <input type="text" class="shop-qty" value="${escH(item.qty||'')}" placeholder="数量" onchange="updateShopItem('${ds}',${idx},'qty',this.value)">
+      <input type="number" class="shop-price" value="${item.price||''}" placeholder="金額" onchange="updateShopItem('${ds}',${idx},'price',this.value)">
+      <button class="shop-del" onclick="deleteShopItem('${ds}',${idx})">✕</button>
+    </div>`).join('');
+  const footerText=list.length>0?`${checkedCount}/${list.length}件完了${totalEst>0?' · 合計目安 ¥'+totalEst.toLocaleString():''}` :'品目を追加してください';
+  container.innerHTML=`
+    <div class="shopping-block">
+      <div class="shopping-block-head" onclick="toggleShopBlock()">
+        <span class="shopping-block-head-left">🛒 買い物メモ${list.length>0?' ('+list.length+'件)':''}</span>
+        <span style="font-size:.72rem;color:#7A5A00;">${checkedCount>0?checkedCount+'件✓':''}</span>
+      </div>
+      <div class="shopping-block-body${state.shopBlockCollapsed?' collapsed':''}" id="shopBlockBody">
+        ${itemsHtml}
+        <button class="shop-add-btn" onclick="addShopItem('${ds}')">＋ 品目を追加</button>
+        <div class="shop-footer">
+          <span>${footerText}</span>
+          <button class="shop-reset-btn" onclick="resetShopList('${ds}')">🗑️ リセット</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function toggleShopBlock(){
+  state.shopBlockCollapsed=!state.shopBlockCollapsed;
+  const body=document.getElementById('shopBlockBody');
+  if(body) body.classList.toggle('collapsed',state.shopBlockCollapsed);
+}
+function addShopItem(ds){ const list=getShopList(ds); list.push({name:'',cat:'食品',qty:'',price:'',checked:false}); saveShopList(ds); renderShoppingBlock(ds); setTimeout(()=>{ const rows=document.querySelectorAll('.shop-item-row'); if(rows.length>0) rows[rows.length-1].querySelector('.shop-name')?.focus(); },50); }
+function updateShopItem(ds,idx,key,val){ const list=getShopList(ds); if(list[idx]) list[idx][key]=val; saveShopList(ds); const checkedCount=list.filter(i=>i.checked).length; const totalEst=list.reduce((s,i)=>s+(parseInt(i.price)||0),0); const footer=document.querySelector('.shop-footer span'); if(footer) footer.textContent=list.length>0?`${checkedCount}/${list.length}件完了${totalEst>0?' · 合計目安 ¥'+totalEst.toLocaleString():''}` :'品目を追加してください'; }
+function toggleShopItem(ds,idx){ const list=getShopList(ds); if(list[idx]) list[idx].checked=!list[idx].checked; saveShopList(ds); renderShoppingBlock(ds); }
+function deleteShopItem(ds,idx){ const list=getShopList(ds); list.splice(idx,1); saveShopList(ds); renderShoppingBlock(ds); }
+function resetShopList(ds){ if(!confirm('買い物メモをリセットしますか？')) return; getMeal(ds).shopList=[]; saveShopList(ds); renderShoppingBlock(ds); showToast('🗑️ 買い物メモをリセットしました'); }
+
 
 // ===== イベントリスナー =====
 document.getElementById('prevMonth').addEventListener('click',()=>changeMonth(-1));
