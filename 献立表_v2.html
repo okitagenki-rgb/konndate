@@ -256,6 +256,13 @@ body{font-family:var(--fb);background:var(--bg);color:var(--ink);min-height:100v
 .kcal-summary{background:var(--sprout-soft);border-radius:var(--r-md);padding:8px 12px;margin-bottom:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:.8rem;}
 .kcal-total{font-weight:700;color:var(--sprout);font-family:var(--fd);}
 .meal-block-actions{display:flex;gap:6px;flex-wrap:wrap;}
+.serving-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;padding:6px 8px;background:var(--good-bg);border-radius:var(--r-sm);border:1px solid var(--good-br);}
+.serving-row label{font-size:.74rem;color:#7A5A00;white-space:nowrap;}
+.serving-input{width:52px;font-size:.82rem;border:1px solid var(--good-br);border-radius:4px;padding:3px 6px;font-family:var(--fb);background:var(--surface);color:var(--ink);text-align:center;}
+.serving-note{font-size:.72rem;color:#7A5A00;}
+.kcal-ai-btn{display:flex;align-items:center;gap:4px;background:var(--good-bg);color:#7A5A00;border:1px solid var(--good-br);border-radius:var(--r-sm);padding:5px 10px;font-size:.76rem;font-family:var(--fb);cursor:pointer;white-space:nowrap;}
+.kcal-ai-btn:hover{opacity:.8;}
+.kcal-ai-btn:disabled{opacity:.4;cursor:not-allowed;}
 .btn-save{background:var(--sprout);color:#fff;border:none;border-radius:var(--r-sm);padding:7px 12px;font-family:var(--fb);font-weight:500;font-size:.8rem;cursor:pointer;}
 .btn-save:hover{opacity:.85;}
 .btn-photo{display:flex;align-items:center;gap:5px;border:1px dashed var(--border);background:var(--surface-soft);border-radius:var(--r-sm);padding:6px 10px;font-size:.78rem;cursor:pointer;color:var(--ink-soft);white-space:nowrap;}
@@ -985,7 +992,131 @@ document.addEventListener('click',e=>{ const tt=document.getElementById('tooltip
 function renderDayPanel(){ document.getElementById('dayPanelTitle').textContent=`${fmtLabel(state.selectedDate)}の献立`; const meal=getMeal(state.selectedDate); const total=totalKcal(state.selectedDate); const ks=document.getElementById('kcalSummary'); if(total>0){ ks.style.display='flex'; const blocks=MEAL_TYPES.map(t=>{ const b=meal[t.id]; return b?.kcal?`<span class="kcal-block">${t.label.match(/./u)[0]} ${b.kcal}kcal</span>`:''; }).join(''); ks.innerHTML=`<span class="kcal-total">🔥 合計 ${total} kcal</span>${blocks}`; } else{ ks.style.display='none'; } document.getElementById('dayRatingBadge').innerHTML=meal.rating?`<span class="rbadge ${RATINGS[meal.rating].cls}">${RATINGS[meal.rating].emoji} ${RATINGS[meal.rating].label}</span>`:''; document.getElementById('btnEvalDay').disabled=!hasAnyMeal(state.selectedDate); const ca=document.getElementById('dayAiCommentArea'); if(meal.comment&&meal.rating){ const r=RATINGS[meal.rating]; ca.innerHTML=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;"><span class="rbadge ${r.cls}">${r.emoji} ${r.label}</span><span style="font-size:.8rem;color:var(--ink-soft);">${esc(meal.comment)}</span></div><button class="btn btn-secondary btn-sm" style="margin-top:4px;" onclick="askDetailAdvice()">💬 詳しいアドバイスを聞く</button>`; } else{ ca.innerHTML=''; } renderMealBlocks(); renderShoppingBlock(state.selectedDate); renderDayDetailPanel(); }
 
 let pendingPhotoType='lunch';
-function renderMealBlocks(){ const container=document.getElementById('mealBlocks'); const ds=state.selectedDate; const meal=getMeal(ds); container.innerHTML=''; MEAL_TYPES.forEach(mt=>{ const block=meal[mt.id]; const div=document.createElement('div'); div.className='meal-block'; const kcalStr=block.kcal?`${block.kcal} kcal`:''; const photoLabel=state.lmAvailable?'📷 写真で認識':'📷 写真から入力'; div.innerHTML=`<div class="meal-block-head"><span class="meal-block-head-left">${mt.label}</span><span class="meal-block-kcal">${kcalStr}</span></div><div class="meal-block-body"><textarea class="meal-textarea" data-type="${mt.id}" placeholder="${mt.placeholder}">${esc(block.text||'')}</textarea><span class="memo-label">📝 レシピ・メモ</span><textarea class="memo-textarea" data-memo="${mt.id}" placeholder="例：醤油・みりんで味付け。">${esc(block.memo||'')}</textarea><div class="kcal-inline"><label>カロリー（kcal）：</label><input class="kcal-input" type="number" data-kcal="${mt.id}" min="0" max="9999" value="${block.kcal||''}"><button class="btn btn-secondary btn-sm" data-calcbtn="${mt.id}">自動計算</button></div><div class="meal-block-actions"><button class="btn-save" data-savebtn="${mt.id}">💾 保存</button><button class="btn-photo" data-photobtn="${mt.id}">${photoLabel}</button></div><div id="save-note-${mt.id}" style="font-size:.72rem;color:var(--sprout);display:none;margin-top:4px;">✓ 保存しました</div></div>`; container.appendChild(div); div.querySelector('.meal-block-head').addEventListener('click',()=>div.querySelector('.meal-block-body').classList.toggle('collapsed')); div.querySelector(`[data-type="${mt.id}"]`).addEventListener('input',e=>div.querySelector(`[data-kcal="${mt.id}"]`).value=estimateCalorieLocal(e.target.value)); div.querySelector(`[data-calcbtn="${mt.id}"]`).addEventListener('click',()=>div.querySelector(`[data-kcal="${mt.id}"]`).value=estimateCalorieLocal(div.querySelector(`[data-type="${mt.id}"]`).value)); div.querySelector(`[data-savebtn="${mt.id}"]`).addEventListener('click',()=>{ const txt=div.querySelector(`[data-type="${mt.id}"]`).value.trim(); const memo=div.querySelector(`[data-memo="${mt.id}"]`).value.trim(); const kcalVal=parseInt(div.querySelector(`[data-kcal="${mt.id}"]`).value)||0; meal[mt.id].text=txt; meal[mt.id].memo=memo; meal[mt.id].kcal=kcalVal; saveMeals(); const note=div.querySelector(`#save-note-${mt.id}`); if(note){ note.style.display='block'; setTimeout(()=>note.style.display='none',2000); } renderDayPanel(); renderCalendarGrid(); renderWeekSummary(); const hasAll=MEAL_TYPES.filter(t=>t.id!=='snack').every(t=>meal[t.id].text); if(hasAll&&state.lmAvailable) evaluateDayMeal(ds); }); div.querySelector(`[data-photobtn="${mt.id}"]`).addEventListener('click',()=>{ pendingPhotoType=mt.id; document.getElementById('fileInput').click(); }); }); }
+function renderMealBlocks(){
+  const container=document.getElementById('mealBlocks');
+  const ds=state.selectedDate; const meal=getMeal(ds); container.innerHTML='';
+  MEAL_TYPES.forEach(mt=>{
+    const block=meal[mt.id];
+    const div=document.createElement('div'); div.className='meal-block';
+    const kcalStr=block.kcal?`${block.kcal} kcal`:'';
+    const photoLabel=state.lmAvailable?'📷 写真で認識':'📷 写真から入力';
+    const aiCalcLabel=state.lmAvailable?'🤖 AIでカロリー計算':'🔢 ローカル計算';
+    const servings=block.servings||1; const portions=block.portions||1;
+    div.innerHTML=`
+      <div class="meal-block-head">
+        <span class="meal-block-head-left">${mt.label}</span>
+        <span class="meal-block-kcal">${kcalStr}</span>
+      </div>
+      <div class="meal-block-body">
+        <textarea class="meal-textarea" data-type="${mt.id}" placeholder="${mt.placeholder}">${esc(block.text||'')}</textarea>
+        <span class="memo-label">📝 レシピ・メモ（材料・分量を書くとカロリー計算の精度が上がります）</span>
+        <textarea class="memo-textarea" data-memo="${mt.id}" placeholder="例：カレー4人分（鶏肉300g、じゃがいも2個、にんじん1本、玉ねぎ1個）">${esc(block.memo||'')}</textarea>
+        <div class="serving-row">
+          <label>🍽️ 何人分：</label>
+          <input type="number" class="serving-input" data-servings="${mt.id}" min="1" max="99" value="${servings}">
+          <label>人分を</label>
+          <input type="number" class="serving-input" data-portions="${mt.id}" min="1" max="99" value="${portions}">
+          <label>回に分けて食べる</label>
+          <span class="serving-note">（1食分で計算）</span>
+        </div>
+        <div class="kcal-inline">
+          <label>カロリー（kcal）：</label>
+          <input class="kcal-input" type="number" data-kcal="${mt.id}" min="0" max="9999" value="${block.kcal||''}" placeholder="自動入力">
+          <button class="kcal-ai-btn" data-aicalcbtn="${mt.id}">${aiCalcLabel}</button>
+        </div>
+        <div class="meal-block-actions">
+          <button class="btn-save" data-savebtn="${mt.id}">💾 保存</button>
+          <button class="btn-photo" data-photobtn="${mt.id}">${photoLabel}</button>
+        </div>
+        <div id="save-note-${mt.id}" style="font-size:.72rem;color:var(--sprout);display:none;margin-top:4px;">✓ 保存しました</div>
+        <div id="kcal-calc-note-${mt.id}" style="font-size:.72rem;color:#7A5A00;display:none;margin-top:4px;"></div>
+      </div>`;
+    container.appendChild(div);
+
+    // ヘッダー折りたたみ
+    div.querySelector('.meal-block-head').addEventListener('click',()=>div.querySelector('.meal-block-body').classList.toggle('collapsed'));
+
+    // AIカロリー計算ボタン
+    div.querySelector(`[data-aicalcbtn="${mt.id}"]`).addEventListener('click', async()=>{
+      const btn=div.querySelector(`[data-aicalcbtn="${mt.id}"]`);
+      const txt=div.querySelector(`[data-type="${mt.id}"]`).value.trim();
+      const memo=div.querySelector(`[data-memo="${mt.id}"]`).value.trim();
+      const sv=parseInt(div.querySelector(`[data-servings="${mt.id}"]`).value)||1;
+      const pt=parseInt(div.querySelector(`[data-portions="${mt.id}"]`).value)||1;
+      const note=div.querySelector(`#kcal-calc-note-${mt.id}`);
+      if(!txt){ showToast('⚠️ 料理名を入力してください'); return; }
+      if(state.lmAvailable){
+        btn.disabled=true; btn.textContent='計算中...';
+        note.style.display='block'; note.textContent='AIがカロリーを計算中...';
+        try{
+          const prompt=`以下の食事のカロリーを計算してください。数値のみ（整数）で返してください。他の文章は不要です。
+料理名：${txt}
+レシピ・メモ：${memo||'不明'}
+${sv}人分を${pt}回に分けて食べる場合の1食分のカロリー（kcal）：`;
+          const res=await fetch(getLMUrl()+'/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:getModel(),max_tokens:20,temperature:0.1,messages:[{role:'user',content:prompt}]})});
+          if(!res.ok) throw new Error('HTTP '+res.status);
+          const data=await res.json();
+          const raw=(data.choices?.[0]?.message?.content||'').trim();
+          const kcal=parseInt(raw.replace(/[^0-9]/g,''));
+          if(kcal>0){
+            div.querySelector(`[data-kcal="${mt.id}"]`).value=kcal;
+            note.textContent=`🤖 AI計算：${sv}人分÷${pt}回 = 1食 ${kcal}kcal`;
+          } else { throw new Error('数値取得失敗'); }
+        }catch(e){
+          const local=Math.round(estimateCalorieLocal(txt)/pt);
+          div.querySelector(`[data-kcal="${mt.id}"]`).value=local;
+          note.textContent=`⚠️ AI計算失敗。ローカル推定：${local}kcal`;
+        }
+        btn.disabled=false; btn.textContent='🤖 AIでカロリー計算';
+      } else {
+        const local=Math.round(estimateCalorieLocal(txt)/pt);
+        div.querySelector(`[data-kcal="${mt.id}"]`).value=local;
+        note.style.display='block';
+        note.textContent=`🔢 ローカル推定：${sv}人分÷${pt}回 = 1食 ${local}kcal（LM Studio未接続）`;
+      }
+    });
+
+    // 保存ボタン
+    div.querySelector(`[data-savebtn="${mt.id}"]`).addEventListener('click', async()=>{
+      const txt=div.querySelector(`[data-type="${mt.id}"]`).value.trim();
+      const memo=div.querySelector(`[data-memo="${mt.id}"]`).value.trim();
+      const sv=parseInt(div.querySelector(`[data-servings="${mt.id}"]`).value)||1;
+      const pt=parseInt(div.querySelector(`[data-portions="${mt.id}"]`).value)||1;
+      let kcalVal=parseInt(div.querySelector(`[data-kcal="${mt.id}"]`).value)||0;
+      const note=div.querySelector(`#kcal-calc-note-${mt.id}`);
+      // カロリー未入力の場合は自動計算
+      if(!kcalVal && txt){
+        if(state.lmAvailable){
+          note.style.display='block'; note.textContent='💾 保存前にカロリーを自動計算中...';
+          try{
+            const prompt=`以下の食事のカロリーを計算してください。数値のみ（整数）で返してください。
+料理名：${txt}
+レシピ・メモ：${memo||'不明'}
+${sv}人分を${pt}回に分けて食べる場合の1食分のカロリー（kcal）：`;
+            const res=await fetch(getLMUrl()+'/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:getModel(),max_tokens:20,temperature:0.1,messages:[{role:'user',content:prompt}]})});
+            if(!res.ok) throw new Error();
+            const data=await res.json();
+            const raw=(data.choices?.[0]?.message?.content||'').trim();
+            const aiKcal=parseInt(raw.replace(/[^0-9]/g,''));
+            if(aiKcal>0){ kcalVal=aiKcal; div.querySelector(`[data-kcal="${mt.id}"]`).value=kcalVal; }
+          }catch(e){ kcalVal=Math.round(estimateCalorieLocal(txt)/pt); }
+        } else { kcalVal=Math.round(estimateCalorieLocal(txt)/pt); }
+      }
+      meal[mt.id].text=txt; meal[mt.id].memo=memo; meal[mt.id].kcal=kcalVal;
+      meal[mt.id].servings=sv; meal[mt.id].portions=pt;
+      saveMeals();
+      const saveNote=div.querySelector(`#save-note-${mt.id}`);
+      if(saveNote){ saveNote.style.display='block'; setTimeout(()=>saveNote.style.display='none',2000); }
+      if(note){ note.style.display='none'; }
+      renderDayPanel(); renderCalendarGrid(); renderWeekSummary();
+      const hasAll=MEAL_TYPES.filter(t=>t.id!=='snack').every(t=>meal[t.id].text);
+      if(hasAll&&state.lmAvailable) evaluateDayMeal(ds);
+    });
+
+    // 写真ボタン
+    div.querySelector(`[data-photobtn="${mt.id}"]`).addEventListener('click',()=>{ pendingPhotoType=mt.id; document.getElementById('fileInput').click(); });
+  });
+}
 
 function renderWeekSummary(){ const el=document.getElementById('weekSummary'); const y=state.calendar.year,m=state.calendar.month; const dim=new Date(y,m,0).getDate(); let recorded=0,good=0,ok=0,bad=0,kcalSum=0; for(let d=1;d<=dim;d++){ const ds=`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`; if(hasAnyMeal(ds)){ recorded++; const meal=getMeal(ds); if(meal.rating==='good') good++; else if(meal.rating==='ok') ok++; else if(meal.rating==='bad') bad++; kcalSum+=totalKcal(ds); } } const avgKcal=recorded>0?Math.round(kcalSum/recorded):0; el.innerHTML=`<span class="ws-title">📊 ${m}月のまとめ</span><span class="ws-stat"><span class="ws-dot" style="background:#CCC"></span>記録:${recorded}日</span><span class="ws-stat"><span class="ws-dot" style="background:var(--good-br)"></span>◎${good}日</span><span class="ws-stat"><span class="ws-dot" style="background:var(--ok-br)"></span>△${ok}日</span><span class="ws-stat"><span class="ws-dot" style="background:var(--bad-br)"></span>✕${bad}日</span>${avgKcal>0?`<span class="ws-stat" style="color:var(--sprout);font-weight:700;">🔥 平均${avgKcal}kcal/日</span>`:''}`; }
 
