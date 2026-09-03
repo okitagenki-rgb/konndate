@@ -172,6 +172,16 @@ body{font-family:var(--fb);background:var(--bg);color:var(--ink);min-height:100v
 .breakdown-table td{padding:8px 10px;border-bottom:1px solid var(--border);}
 .breakdown-table tr:last-child td{border-bottom:none;}
 .bar-inline{height:6px;border-radius:3px;margin-top:4px;}
+.month-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px;background:var(--sprout-soft);border:1px solid var(--sprout);border-radius:var(--r-md);padding:10px 14px;}
+.month-nav-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);width:32px;height:32px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--ink);}
+.month-nav-btn:hover{background:var(--sprout);color:#fff;border-color:var(--sprout);}
+.month-nav-label{font-family:var(--fd);font-size:1rem;font-weight:700;color:var(--sprout);text-align:center;flex:1;}
+.month-nav-sub{font-size:.72rem;color:var(--ink-soft);text-align:center;}
+.month-history{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+.month-history-btn{padding:5px 12px;background:var(--surface-soft);border:1px solid var(--border);border-radius:20px;font-size:12px;cursor:pointer;color:var(--ink-soft);font-family:var(--fb);transition:.2s;}
+.month-history-btn:hover{border-color:var(--sprout);color:var(--sprout);}
+.month-history-btn.active{background:var(--sprout);color:#fff;border-color:var(--sprout);}
+.month-history-btn.has-data{font-weight:700;color:var(--ink);}
 
 /* Analysis */
 .analysis-comment{background:var(--sprout-soft);border-left:3px solid var(--sprout);border-radius:0 var(--r-md) var(--r-md) 0;padding:14px 16px;font-size:13px;line-height:1.7;white-space:pre-wrap;}
@@ -487,12 +497,18 @@ body{font-family:var(--fb);background:var(--bg);color:var(--ink);min-height:100v
     <div id="page-summary" class="page">
       <div class="panel">
         <div class="panel-title"><span>📊 集計</span></div>
-        <div class="period-tabs">
-          <button class="period-tab active" onclick="setPeriod('week',this)">1週間</button>
-          <button class="period-tab" onclick="setPeriod('month',this)">1ヶ月</button>
-          <button class="period-tab" onclick="setPeriod('half',this)">半年</button>
-          <button class="period-tab" onclick="setPeriod('year',this)">1年</button>
+        <!-- 月ナビゲーター -->
+        <div class="month-nav">
+          <button class="month-nav-btn" onclick="changeTargetMonth(-1)">◀</button>
+          <div>
+            <div class="month-nav-label" id="monthNavLabel">読み込み中...</div>
+            <div class="month-nav-sub" id="monthNavSub"></div>
+          </div>
+          <button class="month-nav-btn" onclick="changeTargetMonth(1)">▶</button>
         </div>
+        <!-- 履歴ボタン -->
+        <div class="month-history" id="monthHistory"></div>
+        <!-- 表示切替 -->
         <div class="view-tabs">
           <button class="view-tab active" onclick="setView('cat',this)">カテゴリ別</button>
           <button class="view-tab" onclick="setView('store',this)">店舗別</button>
@@ -705,7 +721,8 @@ const CATS=['食品','日用品','衣類','雑貨','固定費','その他'];
 const CAT_COLORS={食品:'#f59e0b',日用品:'#4f8ef7',衣類:'#a78bfa',雑貨:'#5C8A52',固定費:'#C1654A',その他:'#80877A'};
 const STORAGE_KEY='kakeibo_v1';
 const QUEUE_KEY='kakeibo_queue_v1';
-let photos=[],currentPeriod='month',currentView='cat',currentChartType='pie',analysisPeriod='month',mainChart=null,editingId=null;
+let photos=[],currentView='cat',currentChartType='pie',analysisPeriod='month',mainChart=null,editingId=null;
+let targetYear=new Date().getFullYear(), targetMonth=new Date().getMonth()+1;
 
 function switchPage(id,btn){
   document.querySelectorAll('#app-kakeibo .page').forEach(p=>p.classList.remove('active'));
@@ -820,28 +837,99 @@ function openManualEntry(entry){ editingId=entry?entry.id:null; document.getElem
 function closeModal(){ document.getElementById('manualModal').classList.add('hidden'); editingId=null; }
 function saveModalEntry(){ const date=document.getElementById('m_date').value; const store=document.getElementById('m_store').value.trim(); if(!date){ showToast('⚠️ 日付を入力してください'); return; } if(!store){ showToast('⚠️ 店舗名を入力してください'); return; } const items=collectItems('modal'); if(items.length===0){ showToast('⚠️ 品目がありません'); return; } const entry={id:editingId||Date.now(),date,store,items,savedAt:new Date().toISOString()}; const db=getDB(); const idx=db.findIndex(e=>e.id===entry.id); if(idx>=0) db[idx]=entry; else db.unshift(entry); db.sort((a,b)=>b.date.localeCompare(a.date)); saveDB(db); closeModal(); renderLedger(); showToast('💾 保存しました'); }
 
-function setPeriod(p,btn){ currentPeriod=p; document.querySelectorAll('#page-summary .period-tab').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderSummary(); }
 function setView(v,btn){ currentView=v; document.querySelectorAll('#page-summary .view-tab').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderSummary(); }
 function setChartType(t,btn){ currentChartType=t; document.querySelectorAll('.graph-type-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderSummary(); }
-function getPeriodRange(period){ const now=new Date(); const end=now.toISOString().slice(0,10); let start; if(period==='week'){ const d=new Date(now); d.setDate(d.getDate()-6); start=d.toISOString().slice(0,10); } else if(period==='month'){ const d=new Date(now); d.setDate(1); start=d.toISOString().slice(0,10); } else if(period==='half'){ const d=new Date(now); d.setMonth(d.getMonth()-5); d.setDate(1); start=d.toISOString().slice(0,10); } else{ const d=new Date(now); d.setFullYear(d.getFullYear()-1); d.setDate(d.getDate()+1); start=d.toISOString().slice(0,10); } return{start,end}; }
-function getFilteredData(period){ const{start,end}=getPeriodRange(period); return getDB().filter(e=>e.date>=start&&e.date<=end); }
+
+function getMonthRange(y,m){
+  const start=`${y}-${String(m).padStart(2,'0')}-01`;
+  const lastDay=new Date(y,m,0).getDate();
+  const end=`${y}-${String(m).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+  return{start,end};
+}
+function getFilteredData(period){
+  // 分析タブ用（periodが文字列の場合は旧方式で互換）
+  const now=new Date(); let start,end=now.toISOString().slice(0,10);
+  if(period==='month'){ const d=new Date(now); d.setDate(1); start=d.toISOString().slice(0,10); }
+  else if(period==='half'){ const d=new Date(now); d.setMonth(d.getMonth()-5); d.setDate(1); start=d.toISOString().slice(0,10); }
+  else if(period==='3month'){ const d=new Date(now); d.setMonth(d.getMonth()-2); d.setDate(1); start=d.toISOString().slice(0,10); }
+  else{ const d=new Date(now); d.setFullYear(d.getFullYear()-1); d.setDate(d.getDate()+1); start=d.toISOString().slice(0,10); }
+  return getDB().filter(e=>e.date>=start&&e.date<=end);
+}
+function getMonthsWithData(){
+  const db=getDB(); const months=new Set();
+  db.forEach(e=>{ const ym=e.date.slice(0,7); months.add(ym); });
+  return Array.from(months).sort().reverse();
+}
+function changeTargetMonth(dir){
+  targetMonth+=dir;
+  if(targetMonth>12){ targetMonth=1; targetYear++; }
+  if(targetMonth<1){ targetMonth=12; targetYear--; }
+  renderSummary();
+}
 
 function renderSummary(){
-  const data=getFilteredData(currentPeriod); const total=data.reduce((s,e)=>s+e.items.reduce((ss,i)=>ss+i.price,0),0);
-  const bycat={}; CATS.forEach(c=>bycat[c]=0); data.forEach(e=>e.items.forEach(i=>{ const c=CATS.includes(i.category)?i.category:'その他'; bycat[c]+=i.price; }));
-  const topCat=Object.entries(bycat).sort((a,b)=>b[1]-a[1])[0]; const bystore={}; data.forEach(e=>{ bystore[e.store]=(bystore[e.store]||0)+e.items.reduce((s,i)=>s+i.price,0); }); const topStore=Object.entries(bystore).sort((a,b)=>b[1]-a[1])[0];
-  document.getElementById('summaryCards').innerHTML=`<div class="summary-card"><div class="s-val">¥${total.toLocaleString()}</div><div class="s-lbl">合計支出</div></div><div class="summary-card"><div class="s-val">${data.length}</div><div class="s-lbl">レシート件数</div></div><div class="summary-card"><div class="s-val" style="font-size:15px">${topCat?topCat[0]:'-'}</div><div class="s-lbl">最多カテゴリ</div><div class="s-sub">${topCat?'¥'+topCat[1].toLocaleString():''}</div></div><div class="summary-card"><div class="s-val" style="font-size:15px">${topStore?escH(topStore[0]):'-'}</div><div class="s-lbl">最多店舗</div><div class="s-sub">${topStore?'¥'+topStore[1].toLocaleString():''}</div></div>`;
+  const{start,end}=getMonthRange(targetYear,targetMonth);
+  const data=getDB().filter(e=>e.date>=start&&e.date<=end);
+  const total=data.reduce((s,e)=>s+e.items.reduce((ss,i)=>ss+i.price,0),0);
+
+  // 月ナビラベル更新
+  document.getElementById('monthNavLabel').textContent=`${targetYear}年${targetMonth}月`;
+  document.getElementById('monthNavSub').textContent=data.length>0?`${data.length}件 · ¥${total.toLocaleString()}`:'データなし';
+
+  // 先月比
+  let prevY=targetYear,prevM=targetMonth-1; if(prevM<1){prevM=12;prevY--;}
+  const{start:ps,end:pe}=getMonthRange(prevY,prevM);
+  const prevData=getDB().filter(e=>e.date>=ps&&e.date<=pe);
+  const prevTotal=prevData.reduce((s,e)=>s+e.items.reduce((ss,i)=>ss+i.price,0),0);
+
+  // 履歴ボタン
+  const months=getMonthsWithData();
+  const curYM=`${targetYear}-${String(targetMonth).padStart(2,'0')}`;
+  const histEl=document.getElementById('monthHistory');
+  if(months.length>0){
+    histEl.innerHTML=months.map(ym=>{
+      const[y,m]=ym.split('-');
+      const label=`${y}年${parseInt(m)}月`;
+      const isActive=ym===curYM;
+      return `<button class="month-history-btn has-data${isActive?' active':''}" onclick="jumpToMonth('${ym}')">${label}</button>`;
+    }).join('');
+  } else {
+    histEl.innerHTML='<span style="font-size:12px;color:var(--ink-soft);">まだデータがありません</span>';
+  }
+
+  // サマリーカード
+  const bycat={}; CATS.forEach(c=>bycat[c]=0);
+  data.forEach(e=>e.items.forEach(i=>{ const c=CATS.includes(i.category)?i.category:'その他'; bycat[c]+=i.price; }));
+  const topCat=Object.entries(bycat).sort((a,b)=>b[1]-a[1])[0];
+  const bystore={}; data.forEach(e=>{ bystore[e.store]=(bystore[e.store]||0)+e.items.reduce((s,i)=>s+i.price,0); });
+  const topStore=Object.entries(bystore).sort((a,b)=>b[1]-a[1])[0];
+  const diffHtml=prevTotal>0?`<div class="s-sub" style="color:${total>prevTotal?'var(--danger)':'var(--sprout)'}">${total>prevTotal?'▲':'▼'}¥${Math.abs(total-prevTotal).toLocaleString()}（先月比）</div>`:'';
+
+  document.getElementById('summaryCards').innerHTML=`
+    <div class="summary-card"><div class="s-val">¥${total.toLocaleString()}</div><div class="s-lbl">合計支出</div>${diffHtml}</div>
+    <div class="summary-card"><div class="s-val">${data.length}</div><div class="s-lbl">レシート件数</div></div>
+    <div class="summary-card"><div class="s-val" style="font-size:15px">${topCat&&topCat[1]>0?topCat[0]:'-'}</div><div class="s-lbl">最多カテゴリ</div><div class="s-sub">${topCat&&topCat[1]>0?'¥'+topCat[1].toLocaleString():''}</div></div>
+    <div class="summary-card"><div class="s-val" style="font-size:15px">${topStore?escH(topStore[0]):'-'}</div><div class="s-lbl">最多店舗</div><div class="s-sub">${topStore?'¥'+topStore[1].toLocaleString():''}</div></div>`;
+
+  if(!data.length){ if(mainChart){mainChart.destroy();mainChart=null;} document.getElementById('breakdownTable').innerHTML=''; return; }
+
   let labels,values,colors;
   if(currentView==='cat'){ labels=CATS.filter(c=>bycat[c]>0); values=labels.map(c=>bycat[c]); colors=labels.map(c=>CAT_COLORS[c]); }
   else{ const sorted=Object.entries(bystore).sort((a,b)=>b[1]-a[1]); labels=sorted.map(s=>s[0]); values=sorted.map(s=>s[1]); colors=labels.map((_,i)=>`hsl(${(i*47+140)%360},55%,50%)`); }
-  renderChart(labels,values,colors,total); renderBreakdown(labels,values,colors,total);
+  renderChart(labels,values,colors,total,start,end); renderBreakdown(labels,values,colors,total);
 }
-function renderChart(labels,values,colors,total){
+
+function jumpToMonth(ym){
+  const[y,m]=ym.split('-');
+  targetYear=parseInt(y); targetMonth=parseInt(m);
+  renderSummary();
+}
+function renderChart(labels,values,colors,total,start,end){
   if(mainChart){ mainChart.destroy(); mainChart=null; }
   const ctx=document.getElementById('mainChart').getContext('2d'); const gc='rgba(47,51,44,.1)'; const tc='#80877A';
   if(currentChartType==='pie'){ mainChart=new Chart(ctx,{type:'doughnut',data:{labels,datasets:[{data:values,backgroundColor:colors,borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:tc,font:{size:11}}}}}}); }
   else if(currentChartType==='bar'){ mainChart=new Chart(ctx,{type:'bar',data:{labels,datasets:[{data:values,backgroundColor:colors,borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{color:tc,callback:v=>'¥'+v.toLocaleString()},grid:{color:gc}},x:{ticks:{color:tc},grid:{display:false}}}}}); }
-  else{ const{start,end}=getPeriodRange(currentPeriod); const db=getDB().filter(e=>e.date>=start&&e.date<=end); const byDate={}; db.forEach(e=>{ const v=e.items.reduce((s,i)=>s+i.price,0); byDate[e.date]=(byDate[e.date]||0)+v; }); const dates=Object.keys(byDate).sort(); const vals=dates.map(d=>byDate[d]); mainChart=new Chart(ctx,{type:'line',data:{labels:dates,datasets:[{label:'支出',data:vals,borderColor:CAT_COLORS['雑貨'],backgroundColor:'rgba(92,138,82,.1)',tension:0.3,fill:true,pointRadius:4,pointBackgroundColor:CAT_COLORS['雑貨']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{color:tc,callback:v=>'¥'+v.toLocaleString()},grid:{color:gc}},x:{ticks:{color:tc,maxTicksLimit:10},grid:{display:false}}}}}); }
+  else{ const{start,end}=getMonthRange(targetYear,targetMonth); const db=getDB().filter(e=>e.date>=start&&e.date<=end); const byDate={}; db.forEach(e=>{ const v=e.items.reduce((s,i)=>s+i.price,0); byDate[e.date]=(byDate[e.date]||0)+v; }); const dates=Object.keys(byDate).sort(); const vals=dates.map(d=>byDate[d]); mainChart=new Chart(ctx,{type:'line',data:{labels:dates,datasets:[{label:'支出',data:vals,borderColor:CAT_COLORS['雑貨'],backgroundColor:'rgba(92,138,82,.1)',tension:0.3,fill:true,pointRadius:4,pointBackgroundColor:CAT_COLORS['雑貨']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{color:tc,callback:v=>'¥'+v.toLocaleString()},grid:{color:gc}},x:{ticks:{color:tc,maxTicksLimit:10},grid:{display:false}}}}}); }
 }
 function renderBreakdown(labels,values,colors,total){ const table=document.getElementById('breakdownTable'); if(!labels.length){ table.innerHTML=''; return; } const max=Math.max(...values); table.innerHTML=`<thead><tr><th>項目</th><th>金額</th><th>割合</th><th>グラフ</th></tr></thead><tbody>${labels.map((l,i)=>`<tr><td><span style="display:inline-flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${colors[i]};display:inline-block"></span>${escH(l)}</span></td><td>¥${values[i].toLocaleString()}</td><td>${total?Math.round(values[i]/total*100):0}%</td><td style="min-width:80px"><div class="bar-inline" style="width:${max?Math.round(values[i]/max*100):0}%;background:${colors[i]};min-width:4px"></div></td></tr>`).join('')}</tbody>`; }
 
