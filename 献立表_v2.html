@@ -366,6 +366,19 @@ body{font-family:var(--fb);background:var(--bg);color:var(--ink);min-height:100v
 .shop-reset-btn{background:none;border:1px solid var(--border);border-radius:var(--r-sm);padding:3px 10px;font-size:.74rem;cursor:pointer;color:var(--ink-soft);font-family:var(--fb);}
 .shop-reset-btn:hover{border-color:var(--danger);color:var(--danger);}
 .cell-shop{font-size:.62rem;color:#7A5A00;font-weight:700;}
+.shop-move-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;display:flex;align-items:center;justify-content:center;padding:16px;}
+.shop-move-overlay.hidden{display:none;}
+.shop-move-modal{background:var(--surface);border-radius:var(--r-lg);padding:20px;width:100%;max-width:360px;box-shadow:0 8px 32px rgba(47,51,44,.2);}
+.shop-move-modal h3{font-family:var(--fd);font-size:1rem;margin:0 0 14px;}
+.shop-move-modal label{font-size:.8rem;color:var(--ink-soft);display:block;margin-bottom:6px;}
+.shop-move-date{width:100%;border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 12px;font-size:.95rem;font-family:var(--fb);color:var(--ink);background:var(--surface-soft);margin-bottom:16px;}
+.shop-move-btns{display:flex;flex-direction:column;gap:8px;}
+.shop-move-btn{padding:10px;border:none;border-radius:var(--r-sm);font-size:.88rem;font-weight:700;font-family:var(--fb);cursor:pointer;transition:.2s;}
+.shop-move-btn.move{background:var(--sprout);color:#fff;}
+.shop-move-btn.move:hover{opacity:.85;}
+.shop-move-btn.copy{background:var(--good-bg);color:#7A5A00;border:1px solid var(--good-br);}
+.shop-move-btn.copy:hover{opacity:.8;}
+.shop-move-btn.cancel{background:var(--surface-soft);color:var(--ink-soft);border:1px solid var(--border);}
 
 /* Toast */
 #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface);border:1px solid var(--border);color:var(--ink);padding:11px 22px;border-radius:24px;font-size:13px;box-shadow:var(--shadow);transition:.3s;z-index:9999;white-space:nowrap;}
@@ -628,6 +641,19 @@ body{font-family:var(--fb);background:var(--bg);color:var(--ink);min-height:100v
   </div>
 </div>
 
+<!-- 買い物メモ 移動・コピーモーダル -->
+<div class="shop-move-overlay hidden" id="shopMoveOverlay">
+  <div class="shop-move-modal">
+    <h3>🛒 買い物メモの移動・コピー</h3>
+    <label>移動・コピー先の日付を選択してください</label>
+    <input type="date" class="shop-move-date" id="shopMoveDate">
+    <div class="shop-move-btns">
+      <button class="shop-move-btn move" onclick="execShopMove()">📦 この日に移動（元の日から削除）</button>
+      <button class="shop-move-btn copy" onclick="execShopCopy()">📋 この日にコピー（元の日はそのまま）</button>
+      <button class="shop-move-btn cancel" onclick="closeShopMoveModal()">キャンセル</button>
+    </div>
+  </div>
+</div>
 <input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none;">
 <div class="tooltip" id="tooltip"></div>
 
@@ -1250,7 +1276,10 @@ function renderShoppingBlock(ds){
         <button class="shop-add-btn" onclick="addShopItem('${ds}')">＋ 品目を追加</button>
         <div class="shop-footer">
           <span>${footerText}</span>
-          <button class="shop-reset-btn" onclick="resetShopList('${ds}')">🗑️ リセット</button>
+          <div style="display:flex;gap:5px;">
+            <button class="shop-reset-btn" style="color:#5C8A52;border-color:#5C8A52;" onclick="openShopMoveModal('${ds}')">📦 移動・コピー</button>
+            <button class="shop-reset-btn" onclick="resetShopList('${ds}')">🗑️ リセット</button>
+          </div>
         </div>
       </div>
     </div>`;
@@ -1266,6 +1295,62 @@ function updateShopItem(ds,idx,key,val){ const list=getShopList(ds); if(list[idx
 function toggleShopItem(ds,idx){ const list=getShopList(ds); if(list[idx]) list[idx].checked=!list[idx].checked; saveShopList(ds); renderShoppingBlock(ds); }
 function deleteShopItem(ds,idx){ const list=getShopList(ds); list.splice(idx,1); saveShopList(ds); renderShoppingBlock(ds); }
 function resetShopList(ds){ if(!confirm('買い物メモをリセットしますか？')) return; getMeal(ds).shopList=[]; saveShopList(ds); renderShoppingBlock(ds); showToast('🗑️ 買い物メモをリセットしました'); }
+
+function openShopMoveModal(ds){
+  const list=getShopList(ds);
+  if(list.length===0){ showToast('⚠️ 買い物メモがありません'); return; }
+  // 翌日をデフォルトに設定
+  const next=addDays(ds,1);
+  document.getElementById('shopMoveDate').value=next;
+  document.getElementById('shopMoveOverlay').dataset.srcDs=ds;
+  document.getElementById('shopMoveOverlay').classList.remove('hidden');
+}
+
+function closeShopMoveModal(){
+  document.getElementById('shopMoveOverlay').classList.add('hidden');
+}
+
+function execShopMove(){
+  const overlay=document.getElementById('shopMoveOverlay');
+  const srcDs=overlay.dataset.srcDs;
+  const tgtDs=document.getElementById('shopMoveDate').value;
+  if(!tgtDs){ showToast('⚠️ 移動先の日付を選択してください'); return; }
+  if(tgtDs===srcDs){ showToast('⚠️ 移動元と同じ日付です'); return; }
+  const srcList=getShopList(srcDs);
+  const tgtMeal=getMeal(tgtDs);
+  if(!tgtMeal.shopList) tgtMeal.shopList=[];
+  // チェック済みを外してコピー
+  const items=srcList.map(i=>({...i,checked:false}));
+  tgtMeal.shopList=[...tgtMeal.shopList,...items];
+  // 元の日を削除
+  getMeal(srcDs).shopList=[];
+  saveMeals();
+  renderCalendarGrid();
+  closeShopMoveModal();
+  // 移動先の日付に切り替え
+  state.selectedDate=tgtDs;
+  renderCalendarGrid();
+  renderDayPanel();
+  showToast(`📦 ${fmtLabel(tgtDs)}に移動しました`);
+}
+
+function execShopCopy(){
+  const overlay=document.getElementById('shopMoveOverlay');
+  const srcDs=overlay.dataset.srcDs;
+  const tgtDs=document.getElementById('shopMoveDate').value;
+  if(!tgtDs){ showToast('⚠️ コピー先の日付を選択してください'); return; }
+  if(tgtDs===srcDs){ showToast('⚠️ コピー元と同じ日付です'); return; }
+  const srcList=getShopList(srcDs);
+  const tgtMeal=getMeal(tgtDs);
+  if(!tgtMeal.shopList) tgtMeal.shopList=[];
+  // チェック済みを外してコピー
+  const items=srcList.map(i=>({...i,checked:false}));
+  tgtMeal.shopList=[...tgtMeal.shopList,...items];
+  saveMeals();
+  renderCalendarGrid();
+  closeShopMoveModal();
+  showToast(`📋 ${fmtLabel(tgtDs)}にコピーしました`);
+}
 
 
 // ===== イベントリスナー =====
@@ -1283,6 +1368,7 @@ document.getElementById('detailPopupClose').addEventListener('click',()=>documen
 document.getElementById('detailPopup').addEventListener('click',e=>{ if(e.target===document.getElementById('detailPopup')) document.getElementById('detailPopup').classList.add('hidden'); });
 document.getElementById('photoModalClose').addEventListener('click',closePhotoModal);
 document.getElementById('photoModal').addEventListener('click',e=>{ if(e.target===document.getElementById('photoModal')) closePhotoModal(); });
+document.getElementById('shopMoveOverlay').addEventListener('click',e=>{ if(e.target===document.getElementById('shopMoveOverlay')) closeShopMoveModal(); });
 document.getElementById('fileInput').addEventListener('change',e=>{ const file=e.target.files?.[0]; if(!file) return; const reader=new FileReader(); reader.onload=ev=>{ openPhotoModal(ev.target.result); state.photoModal.selectedType=pendingPhotoType; renderMealTypeGrid(); startPhotoAnalysis(); }; reader.readAsDataURL(file); e.target.value=''; });
 document.getElementById('exportCsv').addEventListener('click',()=>{ const h='日付,朝食,朝kcal,昼食,昼kcal,夕食,夕kcal,おやつ,おやつkcal,合計kcal,評価,AIコメント\n'; const rows=Object.entries(state.meals).sort().map(([ds,m])=>{ const q=s=>'"'+String(s).replace(/"/g,'""')+'"'; return [ds,q(m.morning?.text||''),m.morning?.kcal||0,q(m.lunch?.text||''),m.lunch?.kcal||0,q(m.dinner?.text||''),m.dinner?.kcal||0,q(m.snack?.text||''),m.snack?.kcal||0,totalKcal(ds),m.rating||'',q(m.comment||'')].join(','); }).join('\n'); dlFile('献立記録.csv','\uFEFF'+h+rows,'text/csv'); });
 document.getElementById('exportJson').addEventListener('click',()=>{ const out={}; Object.entries(state.meals).forEach(([ds,m])=>{ out[ds]={morning:{text:m.morning?.text||'',kcal:m.morning?.kcal||0,memo:m.morning?.memo||''},lunch:{text:m.lunch?.text||'',kcal:m.lunch?.kcal||0,memo:m.lunch?.memo||''},dinner:{text:m.dinner?.text||'',kcal:m.dinner?.kcal||0,memo:m.dinner?.memo||''},snack:{text:m.snack?.text||'',kcal:m.snack?.kcal||0,memo:m.snack?.memo||''},rating:m.rating,comment:m.comment}; }); dlFile('献立記録.json',JSON.stringify(out,null,2),'application/json'); });
