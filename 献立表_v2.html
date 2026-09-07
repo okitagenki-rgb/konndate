@@ -39,7 +39,7 @@ body{font-family:var(--fb);background:var(--bg);color:var(--ink);min-height:100v
 
 /* Settings */
 .settings-slide{background:var(--surface);border-bottom:1px solid var(--border);max-height:0;overflow:hidden;transition:max-height .3s ease;}
-.settings-slide.open{max-height:400px;}
+.settings-slide.open{max-height:480px;}
 .s-inner{padding:14px 16px;}
 .s-grid{display:grid;grid-template-columns:2fr 2fr 1fr 1fr;gap:10px;align-items:end;}
 .s-label{font-size:11px;color:var(--ink-soft);margin-bottom:4px;font-weight:600;}
@@ -47,6 +47,15 @@ body{font-family:var(--fb);background:var(--bg);color:var(--ink);min-height:100v
 .s-input:focus{border-color:var(--sprout);}
 .s-btn{background:var(--surface-soft);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 12px;font-size:12px;font-family:var(--fb);cursor:pointer;color:var(--ink);}
 .s-btn:hover{background:var(--sprout);color:#fff;border-color:var(--sprout);}
+.location-btns{display:flex;gap:6px;margin-bottom:12px;}
+.location-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 8px;border-radius:var(--r-md);border:2px solid var(--border);background:var(--surface-soft);cursor:pointer;font-family:var(--fb);transition:.2s;}
+.location-btn:hover{border-color:var(--sprout);}
+.location-btn.active{border-color:var(--sprout);background:var(--sprout-soft);}
+.location-btn .loc-icon{font-size:1.4rem;}
+.location-btn .loc-label{font-size:.78rem;font-weight:700;color:var(--ink);}
+.location-btn .loc-url{font-size:.62rem;color:var(--ink-soft);word-break:break-all;text-align:center;}
+.location-btn.active .loc-label{color:var(--sprout);}
+.location-btn.active .loc-url{color:var(--sprout);}
 
 /* App tabs */
 .app-tabs{display:flex;background:var(--surface);border-bottom:2px solid var(--border);}
@@ -412,9 +421,22 @@ body{font-family:var(--fb);background:var(--bg);color:var(--ink);min-height:100v
 <!-- LM Studio共通設定 -->
 <div class="settings-slide" id="settingsSlide">
   <div class="s-inner">
+    <!-- 接続先切替ボタン -->
+    <div class="location-btns">
+      <button class="location-btn active" id="locBtn_home" onclick="switchLocation('home')">
+        <span class="loc-icon">🏠</span>
+        <span class="loc-label">自宅WiFi</span>
+        <span class="loc-url">192.168.11.4:1234</span>
+      </button>
+      <button class="location-btn" id="locBtn_away" onclick="switchLocation('away')">
+        <span class="loc-icon">📱</span>
+        <span class="loc-label">外出先（Tailscale）</span>
+        <span class="loc-url">100.88.0.88:1234</span>
+      </button>
+    </div>
     <div class="s-grid">
       <div>
-        <div class="s-label">LM Studio アドレス</div>
+        <div class="s-label">LM Studio アドレス（手動変更も可）</div>
         <input class="s-input" id="lmUrl" type="text" value="http://192.168.11.4:1234" placeholder="http://192.168.X.X:1234">
       </div>
       <div>
@@ -688,6 +710,39 @@ body{font-family:var(--fb);background:var(--bg);color:var(--ink);min-height:100v
 <script>
 // ===== 共通設定 =====
 function getLMUrl(){ return document.getElementById('lmUrl').value.trim().replace(/\/$/,''); }
+
+// ===== 接続先切替 =====
+const LOCATIONS={
+  home:{ label:'🏠 自宅WiFi', url:'http://192.168.11.4:1234' },
+  away:{ label:'📱 外出先（Tailscale）', url:'http://100.88.0.88:1234' }
+};
+
+function switchLocation(key){
+  if(!LOCATIONS[key]) return;
+  // URLを更新
+  document.getElementById('lmUrl').value=LOCATIONS[key].url;
+  // ボタンのアクティブ状態を更新
+  Object.keys(LOCATIONS).forEach(k=>{
+    const btn=document.getElementById('locBtn_'+k);
+    if(btn) btn.classList.toggle('active', k===key);
+  });
+  // localStorageに保存
+  localStorage.setItem('lm_location',''+key);
+  // 自動で接続テスト
+  testConn();
+  showToast(LOCATIONS[key].label+' に切り替えました');
+}
+
+function restoreLocation(){
+  const saved=localStorage.getItem('lm_location');
+  if(saved && LOCATIONS[saved]){
+    document.getElementById('lmUrl').value=LOCATIONS[saved].url;
+    Object.keys(LOCATIONS).forEach(k=>{
+      const btn=document.getElementById('locBtn_'+k);
+      if(btn) btn.classList.toggle('active', k===saved);
+    });
+  }
+}
 function getModel(){ const m=document.getElementById('lmModelManual').value.trim(); return m||document.getElementById('lmModel').value.trim()||'local-model'; }
 function syncManual(){ const v=document.getElementById('lmModel').value; if(v) document.getElementById('lmModelManual').value=v; }
 function syncSelect(){ document.getElementById('lmModel').value=''; }
@@ -1382,6 +1437,8 @@ document.getElementById('profileGoal').addEventListener('change',e=>{ state.goal
   const ageEl=document.getElementById('profileAge');
   for(let a=10;a<=90;a++){ const o=document.createElement('option'); o.value=a; o.textContent=`${a}歳`; if(a===30) o.selected=true; ageEl.appendChild(o); }
   document.getElementById('f_date').value=todayStr();
+  // 接続先復元
+  restoreLocation();
   // 設定復元
   const s=loadSettings();
   if(s.goalLevel) state.goalLevel=s.goalLevel;
