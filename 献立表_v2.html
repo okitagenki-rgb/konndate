@@ -860,8 +860,17 @@ async function callKakeiboOCR(base64Arr){
   const timeout=parseInt(document.getElementById('timeoutSec').value)||0;
   const controller=new AbortController(); if(timeout>0) setTimeout(()=>controller.abort(),timeout*1000);
   const prompt=`レシート写真からテキストを読み取り、以下のJSON形式のみで返答してください。
+
+【重要：金額について】
+- 必ず「税込み価格（内税・外税含む最終金額）」を使用してください
+- レシートに「税抜価格」と「税込価格」が両方ある場合は、必ず税込価格を使用してください
+- 「小計」「税抜合計」は使わず、「合計」「税込合計」「お買上げ合計」の金額を参照してください
+- 個別の商品に税抜価格しか記載がない場合：食品(軽減税率8%)は×1.08、その他は×1.10で計算してください
+- 金額は整数（円）で返してください
+
 カテゴリ基準：食品（食材・飲料・菓子・総菜）、日用品（洗剤・化粧品・消耗品）、衣類（服・靴・バッグ）、雑貨（文具・キッチン用品）、固定費（家賃・光熱費・通信）、その他
-{"date":"YYYY-MM-DD","store":"店舗名","items":[{"name":"品名","price":金額数値,"category":"カテゴリ名"}]}`;
+
+{"date":"YYYY-MM-DD","store":"店舗名","items":[{"name":"品名","price":税込金額数値,"category":"カテゴリ名"}]}`;
   const content=[]; base64Arr.forEach(b64=>content.push({type:'image_url',image_url:{url:'data:image/jpeg;base64,'+b64}})); content.push({type:'text',text:prompt});
   const res=await fetch(getLMUrl()+'/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({model:getModel(),max_tokens:2000,temperature:0.1,messages:[{role:'user',content}]})});
   if(!res.ok) throw new Error('HTTP '+res.status);
